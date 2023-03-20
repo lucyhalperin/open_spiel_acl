@@ -48,10 +48,10 @@ from open_spiel.python.algorithms.psro_v2 import rl_policy
 from open_spiel.python.algorithms.psro_v2 import strategy_selectors
 
 
-FLAGS = flags.FLAGS
+FLAGS = flags.FLAGS #flag, default, description
 
 # Game-related
-flags.DEFINE_string("game_name", "kuhn_poker", "Game name.")
+flags.DEFINE_string("game_name", "kuhn_poker", "Game name.")  
 flags.DEFINE_integer("n_players", 2, "The number of players.")
 
 # PSRO related
@@ -117,10 +117,12 @@ flags.DEFINE_bool("verbose", True, "Enables verbose printing and profiling.")
 
 def init_pg_responder(sess, env):
   """Initializes the Policy Gradient-based responder and agents."""
-  info_state_size = env.observation_spec()["info_state"][0]
-  num_actions = env.action_spec()["num_actions"]
+  info_state_size = env.observation_spec()["info_state"][0] #for one player 
+  num_actions = env.action_spec()["num_actions"]            #how many possible actions
 
-  agent_class = rl_policy.PGPolicy
+  #takes PG *agent* from algorithms.policy_gradient (where code to update networks lives!!!), 
+  #generates *agent class* for policy gradient agent 
+  agent_class = rl_policy.PGPolicy   #https://github.com/lucyhalperin/open_spiel_acl/blob/master/open_spiel/python/algorithms/psro_v2/rl_policy.py
 
   agent_kwargs = {
       "session": sess,
@@ -136,7 +138,7 @@ def init_pg_responder(sess, env):
       "num_critic_before_pi": FLAGS.num_q_before_pi,
       "optimizer_str": FLAGS.optimizer_str
   }
-  oracle = rl_oracle.RLOracle(
+  oracle = rl_oracle.RLOracle(  #oracle computes best response!
       env,
       agent_class,
       agent_kwargs,
@@ -144,22 +146,21 @@ def init_pg_responder(sess, env):
       self_play_proportion=FLAGS.self_play_proportion,
       sigma=FLAGS.sigma)
 
-  agents = [
+  agents = [                   #rl_policy.PGPolicy agents with  assigned IDs (2 agents for 2 player game)
       agent_class(  # pylint: disable=g-complex-comprehension
           env,
           player_id,
           **agent_kwargs)
       for player_id in range(FLAGS.n_players)
   ]
-  for agent in agents:
+  for agent in agents: #preventing any training to take place through calls to the step function
     agent.freeze()
   return oracle, agents
 
-
 def init_br_responder(env):
   """Initializes the tabular best-response based responder and agents."""
-  random_policy = policy.TabularPolicy(env.game)
-  oracle = best_response_oracle.BestResponseOracle(
+  random_policy = policy.TabularPolicy(env.game) #i.e., not network policy (table of state action conbos)
+  oracle = best_response_oracle.BestResponseOracle( #exact best response
       game=env.game, policy=random_policy)
   agents = [random_policy.__copy__() for _ in range(FLAGS.n_players)]
   return oracle, agents
@@ -170,7 +171,7 @@ def init_dqn_responder(sess, env):
   state_representation_size = env.observation_spec()["info_state"][0]
   num_actions = env.action_spec()["num_actions"]
 
-  agent_class = rl_policy.DQNPolicy
+  agent_class = rl_policy.DQNPolicy  #DQN agent class from python.algorithms.dqn
   agent_kwargs = {
       "session": sess,
       "state_representation_size": state_representation_size,
@@ -240,32 +241,33 @@ def print_policy_analysis(policies, game, verbose=False):
   print("")
   return unique_policies
 
-
 def gpsro_looper(env, oracle, agents):
   """Initializes and executes the GPSRO training loop."""
-  sample_from_marginals = True  # TODO(somidshafiei) set False for alpharank
-  training_strategy_selector = FLAGS.training_strategy_selector or strategy_selectors.probabilistic
+  sample_from_marginals = True  # TODO(somidshafiei) set False for alpharank #???
+  training_strategy_selector = FLAGS.training_strategy_selector or strategy_selectors.probabilistic #???
 
-  g_psro_solver = psro_v2.PSROSolver(
-      env.game,
-      oracle,
-      initial_policies=agents,
-      training_strategy_selector=training_strategy_selector,
-      rectifier=FLAGS.rectifier,
-      sims_per_entry=FLAGS.sims_per_entry,
-      number_policies_selected=FLAGS.number_policies_selected,
-      meta_strategy_method=FLAGS.meta_strategy_method,
+  #initialize psro solver
+  g_psro_solver = psro_v2.PSROSolver(  #main PSRO algo!  
+      env.game,  
+      oracle, # defined via init_XX_responder
+      initial_policies=agents,  #list of initial policies for each player
+      training_strategy_selector=training_strategy_selector,#probablistic is typical psro
+      rectifier=FLAGS.rectifier, #"None": Train against potentially all strategies; "rectified": Train only against strategies beaten by current strat
+      sims_per_entry=FLAGS.sims_per_entry, #Number of simulations to run to estimate each element of the game outcome matrix
+      number_policies_selected=FLAGS.number_policies_selected, #Number of new strategies trained at each PSRO iteration
+      meta_strategy_method=FLAGS.meta_strategy_method, #options: ['alpharank', 'uniform', 'nash', 'prd']
       prd_iterations=50000,
       prd_gamma=1e-10,
       sample_from_marginals=sample_from_marginals,
       symmetric_game=FLAGS.symmetric_game)
 
   start_time = time.time()
-  for gpsro_iteration in range(FLAGS.gpsro_iterations):
+  for gpsro_iteration in range(FLAGS.gpsro_iterations): #Number of training steps for GPSRO
     if FLAGS.verbose:
       print("Iteration : {}".format(gpsro_iteration))
       print("Time so far: {}".format(time.time() - start_time))
-    g_psro_solver.iteration()
+
+    g_psro_solver.iteration() #in AbstractMetaTrainer class (Generate new BR agents via oracle, update gamestate matrix, compute meta strategy)
     meta_game = g_psro_solver.get_meta_game()
     meta_probabilities = g_psro_solver.get_meta_strategies()
     policies = g_psro_solver.get_policies()
@@ -275,12 +277,12 @@ def gpsro_looper(env, oracle, agents):
       print("Probabilities : {}".format(meta_probabilities))
 
     # The following lines only work for sequential games for the moment.
-    if env.game.get_type().dynamics == pyspiel.GameType.Dynamics.SEQUENTIAL:
-      aggregator = policy_aggregator.PolicyAggregator(env.game)
-      aggr_policies = aggregator.aggregate(
+    if env.game.get_type().dynamics == pyspiel.GameType.Dynamics.SEQUENTIAL: #if sequential game
+      aggregator = policy_aggregator.PolicyAggregator(env.game) #create aggregator object
+      aggr_policies = aggregator.aggregate( #TODO: understand what this does (generate mixture policy?)
           range(FLAGS.n_players), policies, meta_probabilities)
 
-      exploitabilities, expl_per_player = exploitability.nash_conv(
+      exploitabilities, expl_per_player = exploitability.nash_conv(  #calculate exploitability
           env.game, aggr_policies, return_only_nash_conv=False)
 
       _ = print_policy_analysis(policies, env.game, FLAGS.verbose)
@@ -293,13 +295,13 @@ def main(argv):
   if len(argv) > 1:
     raise app.UsageError("Too many command-line arguments.")
 
-  np.random.seed(FLAGS.seed)
+  np.random.seed(FLAGS.seed) #seed randomness
 
-  game = pyspiel.load_game_as_turn_based(FLAGS.game_name,
+  game = pyspiel.load_game_as_turn_based(FLAGS.game_name,  #game specific info, "game object contains the high level description for a game:
                                          {"players": FLAGS.n_players})
-  env = rl_environment.Environment(game)
+  env = rl_environment.Environment(game) #This module wraps Open Spiel Python interface providing an RL-friendly API
 
-  # Initialize oracle and agents
+  # Initialize oracle and agents (DQN, PG, or BR)
   with tf.Session() as sess:
     if FLAGS.oracle_type == "DQN":
       oracle, agents = init_dqn_responder(sess, env)
@@ -307,7 +309,7 @@ def main(argv):
       oracle, agents = init_pg_responder(sess, env)
     elif FLAGS.oracle_type == "BR":
       oracle, agents = init_br_responder(env)
-    sess.run(tf.global_variables_initializer())
+    sess.run(tf.global_variables_initializer()) 
     gpsro_looper(env, oracle, agents)
 
 if __name__ == "__main__":
