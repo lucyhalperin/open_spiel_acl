@@ -149,7 +149,7 @@ class PSROSolver(abstract_meta_trainer.AbstractMetaTrainer):
     self._beta_noise = beta_noise
 
     self._policies = []  # A list of size `num_players` of lists containing the
-    # strategies of each player.
+    # strategies of each player. [[player1 policy],[player2 policy],[player3 policy]...]
     self._new_policies = []
 
     # Alpharank is a special case here, as it's not supported by the abstract
@@ -158,7 +158,7 @@ class PSROSolver(abstract_meta_trainer.AbstractMetaTrainer):
       meta_strategy_method = utils.alpharank_strategy
 
     print("Sampling from marginals : {}".format(sample_from_marginals))
-    self.sample_from_marginals = sample_from_marginals
+    self.sample_from_marginals = sample_from_marginals #marginal vs joint
 
     super(PSROSolver, self).__init__(
         game,
@@ -170,15 +170,15 @@ class PSROSolver(abstract_meta_trainer.AbstractMetaTrainer):
         **kwargs)
 
   def _initialize_policy(self, initial_policies):
-    self._policies = [[] for k in range(self._num_players)]
-    self._new_policies = [([initial_policies[k]] if initial_policies else
+    self._policies = [[] for k in range(self._num_players)] 
+    self._new_policies = [([initial_policies[k]] if initial_policies else  #new policies = initial policies or random
                            [policy.UniformRandomPolicy(self._game)])
                           for k in range(self._num_players)]
 
   def _initialize_game_state(self):
-    effective_payoff_size = self._game_num_players
+    effective_payoff_size = self._game_num_players 
     self._meta_games = [
-        np.array(utils.empty_list_generator(effective_payoff_size))
+        np.array(utils.empty_list_generator(effective_payoff_size)) #[ [[]] [[]] ] if 2
         for _ in range(effective_payoff_size)
     ]
     self.update_empirical_gamestate(seed=None)
@@ -211,10 +211,10 @@ class PSROSolver(abstract_meta_trainer.AbstractMetaTrainer):
     meta-probabilities.
     """
     if self.symmetric_game:
-      self._policies = self._policies * self._game_num_players
+      self._policies = self._policies * self._game_num_players  #[[],[]]*2 --> [[], [], [], []]
 
     self._meta_strategy_probabilities, self._non_marginalized_probabilities = (
-        self._meta_strategy_method(solver=self, return_joint=True))
+        self._meta_strategy_method(solver=self, return_joint=True))  #psro-v2.meta_strategies has meta strat methods 
 
     if self.symmetric_game:
       self._policies = [self._policies[0]]
