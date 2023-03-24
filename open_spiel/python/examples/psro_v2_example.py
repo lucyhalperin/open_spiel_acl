@@ -281,7 +281,10 @@ def gpsro_looper(env, oracle, agents):
       aggregator = policy_aggregator.PolicyAggregator(env.game) #create aggregator object
       aggr_policies = aggregator.aggregate( #TODO: understand what this does (generate mixture policy?)
           range(FLAGS.n_players), policies, meta_probabilities)
-
+      
+      #aggr_policies.save('./saved_models')
+      
+      
       exploitabilities, expl_per_player = exploitability.nash_conv(  #calculate exploitability
           env.game, aggr_policies, return_only_nash_conv=False)
 
@@ -289,7 +292,10 @@ def gpsro_looper(env, oracle, agents):
       if FLAGS.verbose:
         print("Exploitabilities : {}".format(exploitabilities))
         print("Exploitabilities per player : {}".format(expl_per_player))
-
+  #agents[0]._policy.save('./test')
+  #print(len(agents))
+  #aggr_policies.policy.save('./test')
+  #print(aggr_policies.policy)
 
 def main(argv):
   if len(argv) > 1:
