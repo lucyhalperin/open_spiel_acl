@@ -47,6 +47,10 @@ from open_spiel.python.algorithms.psro_v2 import rl_oracle
 from open_spiel.python.algorithms.psro_v2 import rl_policy
 from open_spiel.python.algorithms.psro_v2 import strategy_selectors
 
+from open_spiel.python.bots.policy import PolicyBot
+from open_spiel.python.bots import uniform_random
+from open_spiel.python.algorithms import evaluate_bots
+
 
 FLAGS = flags.FLAGS #flag, default, description
 
@@ -113,7 +117,7 @@ flags.DEFINE_integer("learn_every", 10, "Learn every [X] steps.")
 flags.DEFINE_integer("seed", 1, "Seed.")
 flags.DEFINE_bool("local_launch", False, "Launch locally or not.")
 flags.DEFINE_bool("verbose", True, "Enables verbose printing and profiling.")
-
+flags.DEFINE_bool("training", False, "Whether Training or Testing")
 
 def init_pg_responder(sess, env):
   """Initializes the Policy Gradient-based responder and agents."""
@@ -292,7 +296,9 @@ def gpsro_looper(env, oracle, agents):
       if FLAGS.verbose:
         print("Exploitabilities : {}".format(exploitabilities))
         print("Exploitabilities per player : {}".format(expl_per_player))
-  #agents[0]._policy.save('./test')
+  agents[0]._policy.save('./test')
+  agents[1]._policy.save('./test')
+
   #print(len(agents))
   #aggr_policies.policy.save('./test')
   #print(aggr_policies.policy)
@@ -309,14 +315,32 @@ def main(argv):
 
   # Initialize oracle and agents (DQN, PG, or BR)
   with tf.Session() as sess:
-    if FLAGS.oracle_type == "DQN":
+    if FLAGS.training == True:
+      if FLAGS.oracle_type == "DQN":
+        oracle, agents = init_dqn_responder(sess, env)
+      elif FLAGS.oracle_type == "PG":
+        oracle, agents = init_pg_responder(sess, env)
+      elif FLAGS.oracle_type == "BR":
+        oracle, agents = init_br_responder(env)
+      sess.run(tf.global_variables_initializer()) 
+      gpsro_looper(env, oracle, agents)
+    else:
+      print("testing")
       oracle, agents = init_dqn_responder(sess, env)
-    elif FLAGS.oracle_type == "PG":
-      oracle, agents = init_pg_responder(sess, env)
-    elif FLAGS.oracle_type == "BR":
-      oracle, agents = init_br_responder(env)
-    sess.run(tf.global_variables_initializer()) 
-    gpsro_looper(env, oracle, agents)
+      try:
+        agents[0]._policy.restore('./test')
+        agents[1]._policy.restore('./test')
 
+        random_policy = policy.UniformRandomPolicy(game)
+        player1 = PolicyBot(0, np.random, agents[0])
+        player2 = PolicyBot(0, np.random, agents[1])
+        #player2 = uniform_random.UniformRandomBot(1, np.random)
+        results = np.array([evaluate_bots.evaluate_bots(game.new_initial_state(), [player1,player2], np.random) for _ in range(1000)])
+        #print(results)
+        print(np.average(results,axis=0))
+
+      except ValueError:
+        print("Unable to restore, make sure you already trained agents")
+      
 if __name__ == "__main__":
   app.run(main)

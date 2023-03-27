@@ -11,5 +11,10 @@ export PYTHONPATH=$PYTHONPATH:/home/lucyh/Documents/ACL/open_spiel_acl
 export PYTHONPATH=$PYTHONPATH:/home/lucyh/Documents/ACL/open_spiel_acl/build/python
 
 #run code
-python3 open_spiel/python/examples/psro_v2_example.py --game_name="kuhn_poker" --n_players=2 --meta_strategy_method="nash" --gpsro_iterations=1 --oracle_type="DQN"
-#python3 open_spiel/python/algorithms/testing.py
+python3 open_spiel/python/examples/psro_v2_example.py \
+--game_name="kuhn_poker" \
+--n_players=2 \
+--meta_strategy_method="nash" \
+--gpsro_iterations=10 \
+--oracle_type="DQN" \
+--training=False
