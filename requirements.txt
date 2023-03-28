@@ -19,6 +19,8 @@ scipy >= 1.7.3
 cvxopt==1.3.0
 matplotlib==3.5.2
 networkx==2.4
+dill
+cloudpickle
 
 #matrix games
 jax==0.3.24

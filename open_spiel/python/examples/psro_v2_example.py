@@ -30,6 +30,8 @@ import time
 from absl import app
 from absl import flags
 import numpy as np
+import pickle
+import dill
 
 # pylint: disable=g-bad-import-order
 import pyspiel
@@ -46,6 +48,7 @@ from open_spiel.python.algorithms.psro_v2 import psro_v2
 from open_spiel.python.algorithms.psro_v2 import rl_oracle
 from open_spiel.python.algorithms.psro_v2 import rl_policy
 from open_spiel.python.algorithms.psro_v2 import strategy_selectors
+from open_spiel.python.algorithms.psro_v2.utils import save_object, load_object
 
 from open_spiel.python.bots.policy import PolicyBot
 from open_spiel.python.bots import uniform_random
@@ -266,6 +269,7 @@ def gpsro_looper(env, oracle, agents):
       symmetric_game=FLAGS.symmetric_game)
 
   start_time = time.time()
+  test = []
   for gpsro_iteration in range(FLAGS.gpsro_iterations): #Number of training steps for GPSRO
     if FLAGS.verbose:
       print("Iteration : {}".format(gpsro_iteration))
@@ -275,6 +279,9 @@ def gpsro_looper(env, oracle, agents):
     meta_game = g_psro_solver.get_meta_game()
     meta_probabilities = g_psro_solver.get_meta_strategies()
     policies = g_psro_solver.get_policies()
+    
+    test.append(policies[0][gpsro_iteration]._policy)
+    #policies[0][gpsro_iteration]._policy.save('./test/agent_0_policy_' + str(gpsro_iteration))
 
     if FLAGS.verbose:
       print("Meta game : {}".format(meta_game))
@@ -284,10 +291,7 @@ def gpsro_looper(env, oracle, agents):
     if env.game.get_type().dynamics == pyspiel.GameType.Dynamics.SEQUENTIAL: #if sequential game
       aggregator = policy_aggregator.PolicyAggregator(env.game) #create aggregator object
       aggr_policies = aggregator.aggregate( #TODO: understand what this does (generate mixture policy?)
-          range(FLAGS.n_players), policies, meta_probabilities)
-      
-      #aggr_policies.save('./saved_models')
-      
+          range(FLAGS.n_players), policies, meta_probabilities)      
       
       exploitabilities, expl_per_player = exploitability.nash_conv(  #calculate exploitability
           env.game, aggr_policies, return_only_nash_conv=False)
@@ -296,12 +300,21 @@ def gpsro_looper(env, oracle, agents):
       if FLAGS.verbose:
         print("Exploitabilities : {}".format(exploitabilities))
         print("Exploitabilities per player : {}".format(expl_per_player))
-  agents[0]._policy.save('./test')
-  agents[1]._policy.save('./test')
 
-  #print(len(agents))
-  #aggr_policies.policy.save('./test')
-  #print(aggr_policies.policy)
+  #save agent 1 basis policies 
+  policies = g_psro_solver.get_policies()
+
+  for i in range(len(policies[0])):
+    policies[0][i]._policy.save('./test/agent0_policy_' + str(i))
+
+
+  #save aggr policy
+  with open('./test/aggr_policies.pkl', 'wb') as outp:  # Overwrites any existing file.
+        pickle.dump(aggr_policies, outp,pickle.HIGHEST_PROTOCOL)
+  
+  #save meta_probabilities
+  meta_probabilities = g_psro_solver.get_meta_strategies()
+  np.savetxt('./test/meta_probabilities.csv', meta_probabilities, delimiter=',')
 
 def main(argv):
   if len(argv) > 1:
@@ -324,18 +337,24 @@ def main(argv):
         oracle, agents = init_br_responder(env)
       sess.run(tf.global_variables_initializer()) 
       gpsro_looper(env, oracle, agents)
+
+
     else:
       print("testing")
+      meta_probabilities = np.loadtxt('./test/meta_probabilities.csv', delimiter=',')
+      aggr_policies = load_object('./test/aggr_policies.pkl')
       oracle, agents = init_dqn_responder(sess, env)
+
       try:
-        agents[0]._policy.restore('./test')
-        agents[1]._policy.restore('./test')
+        agents[1]._policy.restore('./test/agent1_policy_1')
+        basis_player = PolicyBot(0, np.random, agents[0])
 
         random_policy = policy.UniformRandomPolicy(game)
-        player1 = PolicyBot(0, np.random, agents[0])
-        player2 = PolicyBot(0, np.random, agents[1])
-        #player2 = uniform_random.UniformRandomBot(1, np.random)
-        results = np.array([evaluate_bots.evaluate_bots(game.new_initial_state(), [player1,player2], np.random) for _ in range(1000)])
+        random_player = PolicyBot(1, np.random,random_policy)
+        aggr_player0 = PolicyBot(0, np.random, aggr_policies)
+        aggr_player1 = PolicyBot(1, np.random, aggr_policies)
+
+        results = np.array([evaluate_bots.evaluate_bots(game.new_initial_state(), [aggr_player0,aggr_player1], np.random) for _ in range(1000)])
         #print(results)
         print(np.average(results,axis=0))
 

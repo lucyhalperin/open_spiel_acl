@@ -286,4 +286,5 @@ class RLOracle(optimization_oracle.AbstractOracle):
     # later not have to make the distinction between static and training
     # policies in training iterations.
     freeze_all(new_policies)
+    
     return new_policies

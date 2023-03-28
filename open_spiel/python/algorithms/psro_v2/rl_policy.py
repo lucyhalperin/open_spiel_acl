@@ -18,7 +18,7 @@ Treating RL Oracles as policies allows us to streamline their use with tabular
 policies and other policies in OpenSpiel, and freely mix populations using
 different types of oracles.
 """
-
+import pickle
 from open_spiel.python import policy
 from open_spiel.python import rl_environment
 from open_spiel.python.algorithms import dqn

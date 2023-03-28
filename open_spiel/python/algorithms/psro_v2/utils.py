@@ -16,6 +16,7 @@
 
 import random
 import numpy as np
+import pickle
 
 from open_spiel.python.algorithms import get_all_states
 from open_spiel.python.algorithms import policy_aggregator
@@ -29,6 +30,16 @@ def empty_list_generator(number_dimensions):
   for _ in range(number_dimensions - 1):
     result = [result]
   return result
+
+def save_object(obj, filename):
+  with open(filename, 'wb') as outp:  # Overwrites any existing file.
+    pickle.dump(obj, outp)
+
+def load_object(filename):
+  with open(filename, 'rb') as inp:
+    # Call load method to deserialze
+    myvar = pickle.load(inp)
+    return myvar
 
 
 def random_choice(outcomes, probabilities):

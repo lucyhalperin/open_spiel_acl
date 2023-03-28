@@ -145,8 +145,8 @@ class PolicyAggregator(object):
     aggr_policies = []
 
     for pid in pids:
-      aggr_policies.append(self._sub_aggregate(pid, policies, weights))
-    return PolicyFunction(pids, aggr_policies, self._game)
+      aggr_policies.append(self._sub_aggregate(pid, policies, weights)) #weights = meta probablities
+    return PolicyFunction(pids, aggr_policies, self._game) 
 
   def _sub_aggregate(self, pid, policies, weights):
     """Aggregate the list of policies for one player.

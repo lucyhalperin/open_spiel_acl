@@ -480,5 +480,5 @@ class PSROSolver(abstract_meta_trainer.AbstractMetaTrainer):
       self.update_meta_strategies()
     return self._non_marginalized_probabilities
 
-  def get_strategy_computation_and_selection_kwargs(self):
+  def get_strategy_comConcputation_and_selection_kwargs(self):
     return self._strategy_computation_and_selection_kwargs
