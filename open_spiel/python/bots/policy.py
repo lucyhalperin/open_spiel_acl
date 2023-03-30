@@ -59,7 +59,8 @@ class PolicyBot(pyspiel.Bot):
       The `action` is sampled from the distribution,
       or `pyspiel.INVALID_ACTION` if there are no actions available.
     """
-    policy = self._policy.action_probabilities(state, self._player_id)
+    policy = self._policy.action_probabilities(state, self._player_id) ##good debugging location - make sure correct policy here by printing
+    print(policy)
     action_list = list(policy.keys())
     if not any(action_list):
       return [], pyspiel.INVALID_ACTION

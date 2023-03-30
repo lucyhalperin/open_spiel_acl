@@ -399,6 +399,8 @@ class PSROSolver(abstract_meta_trainer.AbstractMetaTrainer):
         [slice(len(self._policies[k])) for k in range(self._num_players)])
     for k in range(self._num_players):
       meta_games[k][older_policies_slice] = self._meta_games[k]
+    
+    #NOTE: after this
 
     # Filling the matrix for newly added policies.
     for current_player in range(self._num_players):
@@ -441,8 +443,10 @@ class PSROSolver(abstract_meta_trainer.AbstractMetaTrainer):
                 meta_games[player][used_tuple] += utility_estimates[
                     permutation[player]] / len(player_permutations)
           else:
-            utility_estimates = self.sample_episodes(estimated_policies,
+            #NOTE: estimated policies = same
+            utility_estimates = self.sample_episodes(estimated_policies,  #NOTE: different
                                                      self._sims_per_entry)
+
             for k in range(self._num_players):
               meta_games[k][tuple(used_index)] = utility_estimates[k]
 
@@ -454,8 +458,9 @@ class PSROSolver(abstract_meta_trainer.AbstractMetaTrainer):
       updated_policies = [updated_policies[0]]
       self._num_players = 1
 
-    self._meta_games = meta_games
+    self._meta_games = meta_games #NOTE: different 
     self._policies = updated_policies
+    #import pdb; pdb.set_trace()
     return meta_games
 
   def get_meta_game(self):

@@ -97,11 +97,12 @@ class MLP(tf.Module):
       activate_final: (bool) should final layer should include a ReLU
       name: (string): the name to give to this network
     """
-
     super(MLP, self).__init__(name=name)
     self._layers = []
+
     with self.name_scope:
       # Hidden layers
+      #print(self.name_scope.name)
       for size in hidden_sizes:
         self._layers.append(Linear(in_size=input_size, out_size=size))
         input_size = size
@@ -137,4 +138,5 @@ class MLPTorso(tf.Module):
   def __call__(self, x):
     for layer in self._layers:
       x = layer(x)
+    
     return x

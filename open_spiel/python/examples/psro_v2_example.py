@@ -31,7 +31,7 @@ from absl import app
 from absl import flags
 import numpy as np
 import pickle
-import dill
+import random
 
 # pylint: disable=g-bad-import-order
 import pyspiel
@@ -269,7 +269,6 @@ def gpsro_looper(env, oracle, agents):
       symmetric_game=FLAGS.symmetric_game)
 
   start_time = time.time()
-  test = []
   for gpsro_iteration in range(FLAGS.gpsro_iterations): #Number of training steps for GPSRO
     if FLAGS.verbose:
       print("Iteration : {}".format(gpsro_iteration))
@@ -280,9 +279,6 @@ def gpsro_looper(env, oracle, agents):
     meta_probabilities = g_psro_solver.get_meta_strategies()
     policies = g_psro_solver.get_policies()
     
-    test.append(policies[0][gpsro_iteration]._policy)
-    #policies[0][gpsro_iteration]._policy.save('./test/agent_0_policy_' + str(gpsro_iteration))
-
     if FLAGS.verbose:
       print("Meta game : {}".format(meta_game))
       print("Probabilities : {}".format(meta_probabilities))
@@ -296,17 +292,17 @@ def gpsro_looper(env, oracle, agents):
       exploitabilities, expl_per_player = exploitability.nash_conv(  #calculate exploitability
           env.game, aggr_policies, return_only_nash_conv=False)
 
-      _ = print_policy_analysis(policies, env.game, FLAGS.verbose)
+      #_ = print_policy_analysis(policies, env.game, FLAGS.verbose)
       if FLAGS.verbose:
         print("Exploitabilities : {}".format(exploitabilities))
         print("Exploitabilities per player : {}".format(expl_per_player))
 
-  #save agent 1 basis policies 
+  #save basis policies 
   policies = g_psro_solver.get_policies()
-
   for i in range(len(policies[0])):
-    policies[0][i]._policy.save('./test/agent0_policy_' + str(i))
-
+    if i % 2 == 0:
+      policies[0][i]._policy.save('./test/agent0_' + str(i)) #player 0 
+      policies[1][i]._policy.save('./test/agent1_' + str(i)) #player 1
 
   #save aggr policy
   with open('./test/aggr_policies.pkl', 'wb') as outp:  # Overwrites any existing file.
@@ -319,12 +315,17 @@ def gpsro_looper(env, oracle, agents):
 def main(argv):
   if len(argv) > 1:
     raise app.UsageError("Too many command-line arguments.")
-
+  
+  #seeding 
   np.random.seed(FLAGS.seed) #seed randomness
+  tf.set_random_seed(FLAGS.seed)
 
-  game = pyspiel.load_game_as_turn_based(FLAGS.game_name,  #game specific info, "game object contains the high level description for a game:
-                                         {"players": FLAGS.n_players})
+  game = pyspiel.load_game_as_turn_based(FLAGS.game_name, ) #game specific info, "game object contains the high level description for a game:                          
   env = rl_environment.Environment(game) #This module wraps Open Spiel Python interface providing an RL-friendly API
+  
+  #seeding 
+  env.seed(FLAGS.seed)
+  random.seed(FLAGS.seed)
 
   # Initialize oracle and agents (DQN, PG, or BR)
   with tf.Session() as sess:
@@ -341,22 +342,23 @@ def main(argv):
 
     else:
       print("testing")
+      _, agents = init_dqn_responder(sess, env)  
+      agents[1]._policy.restore('./test/agent1_4/')
       meta_probabilities = np.loadtxt('./test/meta_probabilities.csv', delimiter=',')
       aggr_policies = load_object('./test/aggr_policies.pkl')
-      oracle, agents = init_dqn_responder(sess, env)
 
       try:
-        agents[1]._policy.restore('./test/agent1_policy_1')
-        basis_player = PolicyBot(0, np.random, agents[0])
-
-        random_policy = policy.UniformRandomPolicy(game)
-        random_player = PolicyBot(1, np.random,random_policy)
+        basis_opponent = PolicyBot(1, np.random, agents[1])
+        random_opponent = PolicyBot(1, np.random,policy.UniformRandomPolicy(game))
         aggr_player0 = PolicyBot(0, np.random, aggr_policies)
         aggr_player1 = PolicyBot(1, np.random, aggr_policies)
 
-        results = np.array([evaluate_bots.evaluate_bots(game.new_initial_state(), [aggr_player0,aggr_player1], np.random) for _ in range(1000)])
-        #print(results)
+        #payoff 
+        results = np.array([evaluate_bots.evaluate_bots(game.new_initial_state(), [aggr_player0,basis_opponent ], np.random) for _ in range(100)])
         print(np.average(results,axis=0))
+
+        #exploitability #TODO - figure out exploitability of basis policy 
+        #exploitabilities, expl_per_player = exploitability.nash_conv(env.game, aggr_policies, return_only_nash_conv=False)
 
       except ValueError:
         print("Unable to restore, make sure you already trained agents")

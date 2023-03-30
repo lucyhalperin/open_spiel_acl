@@ -144,10 +144,21 @@ class DQN(rl_agent.AbstractAgent):
         [tf.range(tf.shape(self._q_values)[0]), self._action_ph], axis=-1)
     predictions = tf.gather_nd(self._q_values, action_indices)
 
-    self._savers = [("q_network", tf.train.Saver(self._q_network.variables)),
-                    ("target_q_network",
-                     tf.train.Saver(self._target_q_network.variables))]
+    #rename network variables so can reload any basis policies at test time
+    saver_q_variables = {}
+    for i in self._q_network.variables:
+      new_name = 'mlp/' + i.name.split("/")[1]
+      saver_q_variables[new_name] = i
 
+    target_saver_q_variables = {}
+    for i in self._target_q_network.variables:
+      new_name = 'mlp_1/' + i.name.split("/")[1]
+      target_saver_q_variables[new_name] = i
+
+    self._savers = [("q_network", tf.train.Saver(saver_q_variables)),
+                  ("target_q_network",
+                  tf.train.Saver(target_saver_q_variables))]
+     
     if loss_str == "mse":
       loss_class = tf.losses.mean_squared_error
     elif loss_str == "huber":
@@ -352,12 +363,16 @@ class DQN(rl_agent.AbstractAgent):
     Args:
       checkpoint_dir: directory where checkpoints will be saved.
     """
+    
     for name, saver in self._savers:
       path = saver.save(
           self._session,
           self._full_checkpoint_name(checkpoint_dir, name),
           latest_filename=self._latest_checkpoint_filename(name))
+     
       logging.info("Saved to path: %s", path)
+    #for i in saver._var_list:
+    #    print(i.name)
 
   def has_checkpoint(self, checkpoint_dir):
     for name, _ in self._savers:
