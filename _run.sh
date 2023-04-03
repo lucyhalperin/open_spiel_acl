@@ -12,10 +12,10 @@ export PYTHONPATH=$PYTHONPATH:/home/lucyh/Documents/ACL/open_spiel_acl/build/pyt
 
 #run code
 python3 open_spiel/python/examples/psro_v2_example.py \
---game_name="matrix_rps" \
+--game_name="kuhn_poker" \
 --seed=1 \
 --n_players=2 \
---meta_strategy_method="alpharank" \
---gpsro_iterations=10 \
+--meta_strategy_method="nash" \
+--gpsro_iterations=50 \
 --oracle_type="DQN" \
 --training=False

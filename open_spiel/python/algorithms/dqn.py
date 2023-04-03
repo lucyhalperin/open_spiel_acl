@@ -394,7 +394,7 @@ class DQN(rl_agent.AbstractAgent):
     """
     for name, saver in self._savers:
       full_checkpoint_dir = self._full_checkpoint_name(checkpoint_dir, name)
-      logging.info("Restoring checkpoint: %s", full_checkpoint_dir)
+      #logging.info("Restoring checkpoint: %s", full_checkpoint_dir)
       saver.restore(self._session, full_checkpoint_dir)
 
   @property
