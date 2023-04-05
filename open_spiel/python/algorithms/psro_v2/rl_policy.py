@@ -65,7 +65,7 @@ def rl_policy_factory(rl_class):
       time_step = self._env.get_time_step()
       return time_step
 
-    def action_probabilities(self, state, player_id=None):
+    def action_probabilities(self, state, opp_dist, player_id=None):
       cur_player = state.current_player()
       legal_actions = state.legal_actions(cur_player)
 
@@ -74,7 +74,7 @@ def rl_policy_factory(rl_class):
 
       self._obs["current_player"] = cur_player
       self._obs["info_state"][cur_player] = (
-          state.information_state_tensor(cur_player))
+          state.information_state_tensor(cur_player) + opp_dist) 
       self._obs["legal_actions"][cur_player] = legal_actions
 
       # pylint: disable=protected-access

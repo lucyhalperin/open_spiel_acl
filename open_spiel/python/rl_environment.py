@@ -142,6 +142,7 @@ class Environment(object):
 
   def __init__(self,
                game,
+               opp_dist_size,
                discount=1.0,
                chance_event_sampler=None,
                observation_type=None,
@@ -188,6 +189,7 @@ class Environment(object):
     self._num_players = self._game.num_players()
     self._state = None
     self._should_reset = True
+    self._opp_dist_size = opp_dist_size
 
     # Discount returned at non-initial steps.
     self._discounts = [discount] * self._num_players
@@ -244,7 +246,8 @@ class Environment(object):
       rewards.append(cur_rewards[player_id])
       observations["info_state"].append(
           self._state.observation_tensor(player_id) if self._use_observation
-          else self._state.information_state_tensor(player_id))
+          else self._state.information_state_tensor(player_id)) #TODO: fix
+
 
       observations["legal_actions"].append(self._state.legal_actions(player_id))
     observations["current_player"] = self._state.current_player()
@@ -334,6 +337,8 @@ class Environment(object):
           is `StepType.FIRST`.
         step_type: A `StepType` value.
     """
+    print("reset")
+    self.init_opp_dist = [33]*self._opp_dist_size
     self._should_reset = False
     if self._game.get_type(
     ).dynamics == pyspiel.GameType.Dynamics.MEAN_FIELD and self._num_players > 1:
@@ -352,8 +357,9 @@ class Environment(object):
     for player_id in range(self.num_players):
       observations["info_state"].append(
           self._state.observation_tensor(player_id) if self._use_observation
-          else self._state.information_state_tensor(player_id))
+          else self._state.information_state_tensor(player_id) + self.init_opp_dist)
       observations["legal_actions"].append(self._state.legal_actions(player_id))
+
     observations["current_player"] = self._state.current_player()
 
     if self._include_full_state:
@@ -391,10 +397,11 @@ class Environment(object):
     Returns:
       A specification dict describing the observation fields and shapes.
     """
+  
     return dict(
         info_state=tuple([
-            self._game.observation_tensor_size() if self._use_observation else
-            self._game.information_state_tensor_size()
+            self._game.observation_tensor_size() if self._use_observation else #for Kuhn: 7, 11
+            self._game.information_state_tensor_size() + self._opp_dist_size
         ]),
         legal_actions=(self._game.num_distinct_actions(),),
         current_player=(),

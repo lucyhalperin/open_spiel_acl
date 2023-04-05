@@ -96,9 +96,9 @@ class PolicyPool(object):
     """
     self._policies = policies
 
-  def __call__(self, state, player):
+  def __call__(self, state, opp_dist,player):
     return [
-        a.action_probabilities(state, player_id=player)
+        a.action_probabilities(state, opp_dist,player_id=player)
         for a in self._policies[player]
     ]
 
@@ -106,8 +106,9 @@ class PolicyPool(object):
 class PolicyAggregator(object):
   """Main aggregator object."""
 
-  def __init__(self, game, epsilon=1e-40):
+  def __init__(self, game, opp_dist_size, epsilon=1e-40):
     self._game = game
+    self._opp_dist_size =  opp_dist_size
     self._game_type = game.get_type()
     self._num_players = self._game.num_players()
     self._policy_pool = None
@@ -160,7 +161,6 @@ class PolicyAggregator(object):
       A PolicyFunction, a callable object representing the policy.
     """
     self._policy_pool = PolicyPool(policies)
-    # ipdb.set_trace()
 
     assert self._policy_pool is not None
     self._weights = weights
@@ -168,8 +168,9 @@ class PolicyAggregator(object):
     self._policy = {}
 
     state = self._game.new_initial_state()
+    init_opp_dist = [33]*self._opp_dist_size #TODO change
     my_reaches = weights[:]
-    self._rec_aggregate(pid, state, my_reaches)
+    self._rec_aggregate(pid, state, init_opp_dist, my_reaches)
 
     # Now normalize
     for key in self._policy:
@@ -182,7 +183,7 @@ class PolicyAggregator(object):
         self._policy[key][actions[i]] = new_probs[i] / denom
     return self._policy
 
-  def _rec_aggregate(self, pid, state, my_reaches):
+  def _rec_aggregate(self, pid, state, opp_dist, my_reaches):
     """Recursively traverse game tree to compute aggregate policy."""
 
     if state.is_terminal():
@@ -218,13 +219,13 @@ class PolicyAggregator(object):
         outcome = outcomes[i]
         new_state = state.clone()
         new_state.apply_action(outcome)
-        self._rec_aggregate(pid, new_state, my_reaches)
+        self._rec_aggregate(pid, new_state, opp_dist, my_reaches)
       return
     else:
       turn_player = state.current_player()
 
       state_key = self._state_key(state, turn_player)
-      legal_policies = self._policy_pool(state, turn_player)
+      legal_policies = self._policy_pool(state, opp_dist, turn_player)
       if pid == turn_player:
         # update the current node
         # will need the observation to query the policies
@@ -251,4 +252,4 @@ class PolicyAggregator(object):
         # recurse
         new_state = state.clone()
         new_state.apply_action(uid)
-        self._rec_aggregate(pid, new_state, new_reaches)
+        self._rec_aggregate(pid, new_state, opp_dist,new_reaches)

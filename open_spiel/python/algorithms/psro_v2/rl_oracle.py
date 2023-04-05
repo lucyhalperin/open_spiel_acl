@@ -105,14 +105,17 @@ class RLOracle(optimization_oracle.AbstractOracle):
 
   def sample_episode(self, unused_time_step, agents, is_evaluation=False):
     time_step = self._env.reset()
+    counter = 0 
     cumulative_rewards = 0.0
     while not time_step.last():
+      counter += 1
       if time_step.is_simultaneous_move():
         action_list = []
         for agent in agents:
           output = agent.step(time_step, is_evaluation=is_evaluation)
           action_list.append(output.action)
         time_step = self._env.step(action_list)
+
         cumulative_rewards += np.array(time_step.rewards)
       else:
         player_id = time_step.observations["current_player"]
@@ -124,10 +127,12 @@ class RLOracle(optimization_oracle.AbstractOracle):
         # that prevents policies from training, for all values of is_evaluation.
         # Since all policies returned by the oracle are frozen before being
         # returned, only currently-trained policies can effectively learn.
+        #print(time_step)
         agent_output = agents[player_id].step(
             time_step, is_evaluation=is_evaluation)
         action_list = [agent_output.action]
         time_step = self._env.step(action_list)
+
         cumulative_rewards += np.array(time_step.rewards)
 
     if not is_evaluation:

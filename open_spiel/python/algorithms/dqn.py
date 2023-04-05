@@ -201,11 +201,13 @@ class DQN(rl_agent.AbstractAgent):
         self.player_id == time_step.current_player()):
       info_state = time_step.observations["info_state"][self.player_id]
       legal_actions = time_step.observations["legal_actions"][self.player_id]
+
       epsilon = self._get_epsilon(is_evaluation)
       action, probs = self._epsilon_greedy(info_state, legal_actions, epsilon)
     else:
       action = None
       probs = []
+
 
     # Don't mess up with the state during evaluation.
     if not is_evaluation:
@@ -228,7 +230,7 @@ class DQN(rl_agent.AbstractAgent):
       else:
         self._prev_timestep = time_step
         self._prev_action = action
-
+    print(info_state)
     return rl_agent.StepOutput(action=action, probs=probs)
 
   def add_transition(self, prev_time_step, prev_action, time_step):

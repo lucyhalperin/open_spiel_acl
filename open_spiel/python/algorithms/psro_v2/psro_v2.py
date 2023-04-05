@@ -69,6 +69,7 @@ class PSROSolver(abstract_meta_trainer.AbstractMetaTrainer):
   def __init__(self,
                game,
                oracle,
+               opp_dist_size,
                sims_per_entry,
                initial_policies=None,
                rectifier="",
@@ -163,6 +164,7 @@ class PSROSolver(abstract_meta_trainer.AbstractMetaTrainer):
     super(PSROSolver, self).__init__(
         game,
         oracle,
+        opp_dist_size,
         initial_policies,
         meta_strategy_method,
         training_strategy_selector,
@@ -444,6 +446,7 @@ class PSROSolver(abstract_meta_trainer.AbstractMetaTrainer):
                     permutation[player]] / len(player_permutations)
           else:
             #NOTE: estimated policies = same
+
             utility_estimates = self.sample_episodes(estimated_policies,  #NOTE: different
                                                      self._sims_per_entry)
 

@@ -25,6 +25,7 @@ from open_spiel.python.algorithms.psro_v2 import utils
 
 _DEFAULT_STRATEGY_SELECTION_METHOD = "probabilistic"
 _DEFAULT_META_STRATEGY_METHOD = "prd"
+ 
 
 
 def _process_string_or_callable(string_or_callable, dictionary):
@@ -55,7 +56,7 @@ def _process_string_or_callable(string_or_callable, dictionary):
                                   string_or_callable)) from e
 
 
-def sample_episode(state, policies):
+def sample_episode(state, opp_dist, policies):
   """Samples an episode using policies, starting from state.
 
   Args:
@@ -72,22 +73,24 @@ def sample_episode(state, policies):
   if state.is_simultaneous_node():
     actions = [None] * state.num_players()
     for player in range(state.num_players()):
-      state_policy = policies[player](state, player)
+      state_policy = policies[player](state, opp_dist, player) #TODO: check
       outcomes, probs = zip(*state_policy.items())
       actions[player] = utils.random_choice(outcomes, probs)
     state.apply_actions(actions)
-    return sample_episode(state, policies)
+    return sample_episode(state, opp_dist, policies)
 
   if state.is_chance_node():
     outcomes, probs = zip(*state.chance_outcomes())
   else:
     player = state.current_player()
-    state_policy = policies[player](state)
+
+    state_policy = policies[player](state,opp_dist)  #from policy.py, calling does self.action_probabilities(state, player_id)
+
     outcomes, probs = zip(*state_policy.items())
   
   state.apply_action(utils.random_choice(outcomes, probs))
 
-  return sample_episode(state, policies)
+  return sample_episode(state, opp_dist, policies)
 
 
 class AbstractMetaTrainer(object):
@@ -103,6 +106,7 @@ class AbstractMetaTrainer(object):
   def __init__(self,
                game,
                oracle,
+               opp_dist_size,
                initial_policies=None,
                meta_strategy_method=_DEFAULT_META_STRATEGY_METHOD,
                training_strategy_selector=_DEFAULT_STRATEGY_SELECTION_METHOD,
@@ -150,6 +154,7 @@ class AbstractMetaTrainer(object):
     self._iterations = 0
     self._game = game
     self._oracle = oracle
+    self._opp_dist_size = opp_dist_size
     self._num_players = self._game.num_players()
 
     self.symmetric_game = symmetric_game
@@ -182,6 +187,7 @@ class AbstractMetaTrainer(object):
 
   def _initialize_game_state(self):
     return NotImplementedError("initialize_game_state not implemented.")
+  
 
   def iteration(self, seed=None):
     """Main trainer loop.
@@ -219,8 +225,9 @@ class AbstractMetaTrainer(object):
       Average episode return over num episodes.
     """
     totals = np.zeros(self._num_players)
+    init_opp_dist = [33]*self._opp_dist_size #TODO change
     for _ in range(num_episodes):
-      totals += sample_episode(self._game.new_initial_state(), #NOTE: different 
+      totals += sample_episode(self._game.new_initial_state(), init_opp_dist, #NOTE: different 
                                policies).reshape(-1)
     return totals / num_episodes
 

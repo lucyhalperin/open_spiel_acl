@@ -123,6 +123,10 @@ flags.DEFINE_bool("local_launch", False, "Launch locally or not.")
 flags.DEFINE_bool("verbose", True, "Enables verbose printing and profiling.")
 flags.DEFINE_bool("training", False, "Whether Training or Testing")
 
+#NeuPL
+flags.DEFINE_integer("opp_dist_size", 2, "wsize of opponent distribution reprsentation (i.e., 2 is a list of length 2")
+
+
 def init_pg_responder(sess, env):
   """Initializes the Policy Gradient-based responder and agents."""
   info_state_size = env.observation_spec()["info_state"][0] #for one player 
@@ -176,7 +180,7 @@ def init_br_responder(env):
 
 def init_dqn_responder(sess, env):
   """Initializes the Policy Gradient-based responder and agents."""
-  state_representation_size = env.observation_spec()["info_state"][0]
+  state_representation_size = env.observation_spec()["info_state"][0] 
   num_actions = env.action_spec()["num_actions"]
 
   agent_class = rl_policy.DQNPolicy  #DQN agent class from python.algorithms.dqn
@@ -258,6 +262,7 @@ def gpsro_looper(env, oracle, agents):
   g_psro_solver = psro_v2.PSROSolver(  #main PSRO algo!  
       env.game,  
       oracle, # defined via init_XX_responder
+      opp_dist_size = FLAGS.opp_dist_size,
       initial_policies=agents,  #list of initial policies for each player
       training_strategy_selector=training_strategy_selector,#probablistic is typical psro
       rectifier=FLAGS.rectifier, #"None": Train against potentially all strategies; "rectified": Train only against strategies beaten by current strat
@@ -286,7 +291,7 @@ def gpsro_looper(env, oracle, agents):
 
     # The following lines only work for sequential games for the moment.
     if env.game.get_type().dynamics == pyspiel.GameType.Dynamics.SEQUENTIAL: #if sequential game
-      aggregator = policy_aggregator.PolicyAggregator(env.game) #create aggregator object
+      aggregator = policy_aggregator.PolicyAggregator(env.game, FLAGS.opp_dist_size) #create aggregator object
       aggr_policies = aggregator.aggregate( 
           range(FLAGS.n_players), policies, meta_probabilities)      
       
@@ -297,21 +302,22 @@ def gpsro_looper(env, oracle, agents):
       if FLAGS.verbose:
         print("Exploitabilities : {}".format(exploitabilities))
         print("Exploitabilities per player : {}".format(expl_per_player))
-
-  #save basis policies 
+  
   policies = g_psro_solver.get_policies()
   for i in range(len(policies[0])):
     if i % 3 == 0:
       #policies[0][i]._policy.save('./test/agent0_' + str(i)) #player 0 
-      policies[1][i]._policy.save('./test/' + FLAGS.game_name + '/agent1_' + str(i)) #player 1
+      policies[1][i]._policy.save('./test_conditional/' + FLAGS.game_name + '/agent1_' + str(i)) #player 1
 
+  
   #save aggr policy
-  with open('./test/' + FLAGS.game_name + '/aggr_policies.pkl', 'wb') as outp:  # Overwrites any existing file.
+  with open('./test_conditional/' + FLAGS.game_name + '/aggr_policies.pkl', 'wb') as outp:  # Overwrites any existing file.
         pickle.dump(aggr_policies, outp,pickle.HIGHEST_PROTOCOL)
+  print(aggr_policies)
   
   #save meta_probabilities
   meta_probabilities = g_psro_solver.get_meta_strategies()
-  np.savetxt('./test/' + FLAGS.game_name + '/meta_probabilities.csv', meta_probabilities, delimiter=',')
+  np.savetxt('./test_conditional/' + FLAGS.game_name + '/meta_probabilities.csv', meta_probabilities, delimiter=',')
 
 def testing(result_type,aggr_policies,agents,stationary_basis,game):
   assert result_type in ["eq_vs_eq","eq_vs_Sbasis","eq_vs_random","eq_vs_NSbasis"]
@@ -340,7 +346,7 @@ def main(argv):
   tf.set_random_seed(FLAGS.seed)
 
   game = pyspiel.load_game_as_turn_based(FLAGS.game_name) #game specific info, "game obj:0ect contains the high level description for a game:                          
-  env = rl_environment.Environment(game) #This module wraps Open Spiel Python interface providing an RL-friendly API
+  env = rl_environment.Environment(game,opp_dist_size=FLAGS.opp_dist_size) #This module wraps Open Spiel Python interface providing an RL-friendly API
   
   #seeding 
   env.seed(FLAGS.seed)
@@ -363,12 +369,13 @@ def main(argv):
       print("testing")
       _, agents = init_dqn_responder(sess, env)
       stationary_basis = '24'  
-      aggr_policies = load_object('./test/'  + FLAGS.game_name + '/aggr_policies.pkl')
+      aggr_policies = load_object('./test_conditional/'  + FLAGS.game_name + '/aggr_policies.pkl')
+      print(aggr_policies.policy)
       aggr_player0 = PolicyBot(0, np.random, aggr_policies)
       num_trials = 10000
       try:
         result_dict = {}
-        for result_type in ["eq_vs_Sbasis","eq_vs_eq"]: #,"eq_vs_random","eq_vs_NSbasis"]:
+        for result_type in ["eq_vs_eq"]: #,"eq_vs_random","eq_vs_NSbasis"]:
           opponent, NS = testing(result_type,aggr_policies,agents,stationary_basis,game)
           results = np.array([evaluate_bots.evaluate_bots(game.new_initial_state(), [aggr_player0,opponent], np.random,NS) for _ in range(num_trials)])
           result_dict[result_type] = np.average(results,axis=0)
@@ -377,22 +384,7 @@ def main(argv):
           print(key,result_dict[key])
       except ValueError:
         print("Unable to restore, make sure you already trained agents")
-        
-      data = result_dict
-      courses = list(data.keys())
-      values = np.array(list(data.values()))[:,0]
       
-      fig = plt.figure(figsize = (10, 5))
-      
-      # creating the bar plot
-      plt.bar(courses, values, color ='maroon',
-              width = 0.4)
-      
-      plt.xlabel("Player Types")
-      plt.ylabel("Payoff")
-      plt.title("Kuhn Poker")
-      plt.show()
-
       #exploitability #TODO - figure out exploitability of basis policy 
       #exploitabilities, expl_per_player = exploitability.nash_conv(env.game, aggr_policies, return_only_nash_conv=False)
 
