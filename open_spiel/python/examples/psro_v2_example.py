@@ -124,7 +124,7 @@ flags.DEFINE_bool("verbose", True, "Enables verbose printing and profiling.")
 flags.DEFINE_bool("training", False, "Whether Training or Testing")
 
 #NeuPL
-flags.DEFINE_integer("opp_dist_size", 2, "wsize of opponent distribution reprsentation (i.e., 2 is a list of length 2")
+flags.DEFINE_integer("opp_dist_size", 3, "wsize of opponent distribution reprsentation (i.e., 2 is a list of length 2")
 
 
 def init_pg_responder(sess, env):

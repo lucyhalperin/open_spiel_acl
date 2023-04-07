@@ -230,7 +230,7 @@ class DQN(rl_agent.AbstractAgent):
       else:
         self._prev_timestep = time_step
         self._prev_action = action
-    print(info_state)
+
     return rl_agent.StepOutput(action=action, probs=probs)
 
   def add_transition(self, prev_time_step, prev_action, time_step):

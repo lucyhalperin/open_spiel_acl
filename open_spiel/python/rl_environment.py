@@ -246,7 +246,7 @@ class Environment(object):
       rewards.append(cur_rewards[player_id])
       observations["info_state"].append(
           self._state.observation_tensor(player_id) if self._use_observation
-          else self._state.information_state_tensor(player_id)) #TODO: fix
+          else self._state.information_state_tensor(player_id) +[33]*self._opp_dist_size) #TODO: fix (add observations of opp dist )
 
 
       observations["legal_actions"].append(self._state.legal_actions(player_id))
@@ -337,7 +337,6 @@ class Environment(object):
           is `StepType.FIRST`.
         step_type: A `StepType` value.
     """
-    print("reset")
     self.init_opp_dist = [33]*self._opp_dist_size
     self._should_reset = False
     if self._game.get_type(
