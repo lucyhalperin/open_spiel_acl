@@ -45,6 +45,8 @@ def to_fraction_str(x, lrsnash_max_denom):
 
 
 def lrs_solve(row_payoffs, col_payoffs, lrsnash_max_denom, lrsnash_path):
+  print('hey')
+  import sys; sys.exit()
   """Find all Nash equilibria using the lrsnash solver.
 
   `lrsnash` uses reverse search vertex enumeration on rational polytopes.

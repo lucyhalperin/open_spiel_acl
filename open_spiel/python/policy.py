@@ -117,7 +117,7 @@ class Policy:
     self.game = game
     self.player_ids = player_ids
 
-  def action_probabilities(self, state, opp_dist, player_id=None):
+  def action_probabilities(self, state, player_id=None):
     """Returns a dictionary {action: prob} for all legal actions.
 
     IMPORTANT: We assume the following properties hold:
@@ -142,7 +142,7 @@ class Policy:
     """
     raise NotImplementedError()
 
-  def __call__(self, state, opp_dist, player_id=None):
+  def __call__(self, state, player_id=None):
     """Turns the policy into a callable.
 
     Args:
@@ -153,7 +153,7 @@ class Policy:
     Returns:
       Dictionary of action: probability.
     """
-    return self.action_probabilities(state, opp_dist, player_id)
+    return self.action_probabilities(state,player_id)
 
   def to_tabular(self, states=None):
     """Returns a new `TabularPolicy` equivalent to this policy.

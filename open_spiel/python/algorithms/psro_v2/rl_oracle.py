@@ -227,7 +227,7 @@ class RLOracle(optimization_oracle.AbstractOracle):
       training_parameters.
     """
     new_policies = []
-    for player in range(len(training_parameters)):
+    for player in range(len(training_parameters)): #policy, total_policies, current plyer, prob of playing policies 
       player_parameters = training_parameters[player]
       new_pols = []
       for param in player_parameters:
@@ -241,6 +241,9 @@ class RLOracle(optimization_oracle.AbstractOracle):
         new_pols.append(new_pol)
       new_policies.append(new_pols)
     return new_policies
+
+  def generate_new_policies_test(self, training_parameters):
+    pass
 
   def __call__(self,
                game,

@@ -29,7 +29,7 @@ tf.disable_v2_behavior()
 
 Transition = collections.namedtuple(
     "Transition",
-    "info_state action reward next_info_state is_final_step legal_actions_mask")
+    "info_state latent action reward next_info_state is_final_step legal_actions_mask")
 
 ILLEGAL_ACTION_LOGITS_PENALTY = -1e9
 
@@ -45,6 +45,7 @@ class DQN(rl_agent.AbstractAgent):
                player_id,
                state_representation_size,
                num_actions,
+               N,
                hidden_layers_sizes=128,
                replay_buffer_capacity=10000,
                batch_size=128,
@@ -68,6 +69,7 @@ class DQN(rl_agent.AbstractAgent):
     self.player_id = player_id
     self._session = session
     self._num_actions = num_actions
+    self._N = N
     if isinstance(hidden_layers_sizes, int):
       hidden_layers_sizes = [hidden_layers_sizes]
     self._layer_sizes = hidden_layers_sizes
@@ -93,12 +95,18 @@ class DQN(rl_agent.AbstractAgent):
 
     # Keep track of the last training loss achieved in an update step.
     self._last_loss_value = None
+    self._latent = [0,0,0,1]  #TODO: change from random
+
 
     # Create required TensorFlow placeholders to perform the Q-network updates.
     self._info_state_ph = tf.placeholder(
         shape=[None, state_representation_size],
         dtype=tf.float32,
         name="info_state_ph")
+    self._latent_ph = tf.placeholder(
+        shape=[None, N],
+        dtype=tf.float32,
+        name="latent_ph")
     self._action_ph = tf.placeholder(
         shape=[None], dtype=tf.int32, name="action_ph")
     self._reward_ph = tf.placeholder(
@@ -115,12 +123,12 @@ class DQN(rl_agent.AbstractAgent):
         name="legal_actions_mask_ph")
 
     self._q_network = simple_nets.MLP(state_representation_size,
-                                      self._layer_sizes, num_actions)
-    self._q_values = self._q_network(self._info_state_ph)
+                                      self._layer_sizes, num_actions,N)
+    self._q_values = self._q_network(self._info_state_ph, self._latent_ph)
 
     self._target_q_network = simple_nets.MLP(state_representation_size,
-                                             self._layer_sizes, num_actions)
-    self._target_q_values = self._target_q_network(self._next_info_state_ph)
+                                             self._layer_sizes, num_actions,N)
+    self._target_q_values = self._target_q_network(self._next_info_state_ph,self._latent_ph)
 
     # Stop gradient to prevent updates to the target network while learning
     self._target_q_values = tf.stop_gradient(self._target_q_values)
@@ -183,6 +191,10 @@ class DQN(rl_agent.AbstractAgent):
   def get_step_counter(self):
     return self._step_counter
 
+  def set_latent(self,latent):
+      self._latent = latent
+  
+
   def step(self, time_step, is_evaluation=False, add_transition_record=True):
     """Returns the action to be taken and updates the Q-network if needed.
 
@@ -203,7 +215,7 @@ class DQN(rl_agent.AbstractAgent):
       legal_actions = time_step.observations["legal_actions"][self.player_id]
 
       epsilon = self._get_epsilon(is_evaluation)
-      action, probs = self._epsilon_greedy(info_state, legal_actions, epsilon)
+      action, probs = self._epsilon_greedy(info_state,legal_actions, epsilon)
     else:
       action = None
       probs = []
@@ -251,6 +263,7 @@ class DQN(rl_agent.AbstractAgent):
     transition = Transition(
         info_state=(
             prev_time_step.observations["info_state"][self.player_id][:]),
+        latent = self._latent,
         action=prev_action,
         reward=time_step.rewards[self.player_id],
         next_info_state=time_step.observations["info_state"][self.player_id][:],
@@ -298,8 +311,9 @@ class DQN(rl_agent.AbstractAgent):
       probs[legal_actions] = 1.0 / len(legal_actions)
     else:
       info_state = np.reshape(info_state, [1, -1])
+      latent_values = np.reshape(self._latent, [1, -1])
       q_values = self._session.run(
-          self._q_values, feed_dict={self._info_state_ph: info_state})[0]
+          self._q_values, feed_dict={self._info_state_ph: info_state,self._latent_ph: latent_values})[0]
       legal_q_values = q_values[legal_actions]
       action = legal_actions[np.argmax(legal_q_values)]
       probs[action] = 1.0
@@ -331,6 +345,7 @@ class DQN(rl_agent.AbstractAgent):
 
     transitions = self._replay_buffer.sample(self._batch_size)
     info_states = [t.info_state for t in transitions]
+    latents = [t.latent for t in transitions]
     actions = [t.action for t in transitions]
     rewards = [t.reward for t in transitions]
     next_info_states = [t.next_info_state for t in transitions]
@@ -340,6 +355,7 @@ class DQN(rl_agent.AbstractAgent):
         [self._loss, self._learn_step],
         feed_dict={
             self._info_state_ph: info_states,
+            self._latent_ph: latents,  #TODO: fix to be tied to transition
             self._action_ph: actions,
             self._reward_ph: rewards,
             self._is_final_step_ph: are_final_steps,
@@ -410,6 +426,10 @@ class DQN(rl_agent.AbstractAgent):
   @property
   def info_state_ph(self):
     return self._info_state_ph
+
+  @property
+  def latent_ph(self):
+    return self._latent_ph
 
   @property
   def loss(self):

@@ -86,6 +86,7 @@ class MLP(tf.Module):
                input_size,
                hidden_sizes,
                output_size,
+               latent_size,
                activate_final=False,
                name=None):
     """Create the MLP.
@@ -109,14 +110,17 @@ class MLP(tf.Module):
       # Output layer
       self._layers.append(
           Linear(
-              in_size=input_size,
+              in_size=input_size + latent_size,
               out_size=output_size,
               activate_relu=activate_final))
 
   @tf.Module.with_name_scope
-  def __call__(self, x):
-    for layer in self._layers:
+  def __call__(self, x,latent):
+    for layer in self._layers[:-1]:
       x = layer(x)
+    concat_x = tf.concat([x, latent], axis=1)
+    x = self._layers[-1](concat_x)
+    
     return x
 
 

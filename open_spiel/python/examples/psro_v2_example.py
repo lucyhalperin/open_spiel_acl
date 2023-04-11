@@ -124,8 +124,7 @@ flags.DEFINE_bool("verbose", True, "Enables verbose printing and profiling.")
 flags.DEFINE_bool("training", False, "Whether Training or Testing")
 
 #NeuPL
-flags.DEFINE_integer("opp_dist_size", 3, "wsize of opponent distribution reprsentation (i.e., 2 is a list of length 2")
-
+flags.DEFINE_integer("N", 4, "policy population size")
 
 def init_pg_responder(sess, env):
   """Initializes the Policy Gradient-based responder and agents."""
@@ -140,6 +139,7 @@ def init_pg_responder(sess, env):
       "session": sess,
       "info_state_size": info_state_size,
       "num_actions": num_actions,
+      "N": FLAGS.N,
       "loss_str": FLAGS.loss_str,
       "loss_class": False,
       "hidden_layers_sizes": [FLAGS.hidden_layer_size] * FLAGS.n_hidden_layers,
@@ -188,6 +188,7 @@ def init_dqn_responder(sess, env):
       "session": sess,
       "state_representation_size": state_representation_size,
       "num_actions": num_actions,
+      "N": FLAGS.N,
       "hidden_layers_sizes": [FLAGS.hidden_layer_size] * FLAGS.n_hidden_layers,
       "batch_size": FLAGS.batch_size,
       "learning_rate": FLAGS.dqn_learning_rate,
@@ -262,7 +263,7 @@ def gpsro_looper(env, oracle, agents):
   g_psro_solver = psro_v2.PSROSolver(  #main PSRO algo!  
       env.game,  
       oracle, # defined via init_XX_responder
-      opp_dist_size = FLAGS.opp_dist_size,
+      N=FLAGS.N,
       initial_policies=agents,  #list of initial policies for each player
       training_strategy_selector=training_strategy_selector,#probablistic is typical psro
       rectifier=FLAGS.rectifier, #"None": Train against potentially all strategies; "rectified": Train only against strategies beaten by current strat
@@ -291,7 +292,7 @@ def gpsro_looper(env, oracle, agents):
 
     # The following lines only work for sequential games for the moment.
     if env.game.get_type().dynamics == pyspiel.GameType.Dynamics.SEQUENTIAL: #if sequential game
-      aggregator = policy_aggregator.PolicyAggregator(env.game, FLAGS.opp_dist_size) #create aggregator object
+      aggregator = policy_aggregator.PolicyAggregator(env.game) #create aggregator object
       aggr_policies = aggregator.aggregate( 
           range(FLAGS.n_players), policies, meta_probabilities)      
       
@@ -304,16 +305,16 @@ def gpsro_looper(env, oracle, agents):
         print("Exploitabilities per player : {}".format(expl_per_player))
   
   policies = g_psro_solver.get_policies()
-  for i in range(len(policies[0])):
-    if i % 3 == 0:
-      #policies[0][i]._policy.save('./test/agent0_' + str(i)) #player 0 
-      policies[1][i]._policy.save('./test_conditional/' + FLAGS.game_name + '/agent1_' + str(i)) #player 1
+  #for i in range(len(policies[0])):
+  #  if i % 3 == 0:
+  #    #policies[0][i]._policy.save('./test/agent0_' + str(i)) #player 0 
+  #    policies[1][i]._policy.save('./test_conditional/' + FLAGS.game_name + '/agent1_' + str(i)) #player 1
 
   
   #save aggr policy
-  with open('./test_conditional/' + FLAGS.game_name + '/aggr_policies.pkl', 'wb') as outp:  # Overwrites any existing file.
-        pickle.dump(aggr_policies, outp,pickle.HIGHEST_PROTOCOL)
-  print(aggr_policies)
+  #with open('./test_conditional/' + FLAGS.game_name + '/aggr_policies.pkl', 'wb') as outp:  # Overwrites any existing file.
+  #      pickle.dump(aggr_policies, outp,pickle.HIGHEST_PROTOCOL)
+  #print(aggr_policies)
   
   #save meta_probabilities
   meta_probabilities = g_psro_solver.get_meta_strategies()
@@ -346,7 +347,7 @@ def main(argv):
   tf.set_random_seed(FLAGS.seed)
 
   game = pyspiel.load_game_as_turn_based(FLAGS.game_name) #game specific info, "game obj:0ect contains the high level description for a game:                          
-  env = rl_environment.Environment(game,opp_dist_size=FLAGS.opp_dist_size) #This module wraps Open Spiel Python interface providing an RL-friendly API
+  env = rl_environment.Environment(game) #This module wraps Open Spiel Python interface providing an RL-friendly API
   
   #seeding 
   env.seed(FLAGS.seed)

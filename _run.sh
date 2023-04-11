@@ -16,6 +16,6 @@ python3 open_spiel/python/examples/psro_v2_example.py \
 --seed=1 \
 --n_players=2 \
 --meta_strategy_method="nash" \
---gpsro_iterations=15 \
+--gpsro_iterations=2 \
 --oracle_type="DQN" \
 --training=True

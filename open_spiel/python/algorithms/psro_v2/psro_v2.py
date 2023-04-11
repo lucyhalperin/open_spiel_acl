@@ -69,7 +69,7 @@ class PSROSolver(abstract_meta_trainer.AbstractMetaTrainer):
   def __init__(self,
                game,
                oracle,
-               opp_dist_size,
+               N,
                sims_per_entry,
                initial_policies=None,
                rectifier="",
@@ -133,6 +133,7 @@ class PSROSolver(abstract_meta_trainer.AbstractMetaTrainer):
       **kwargs: kwargs for meta strategy computation and training strategy
         selection.
     """
+    self.N=N
     self._sims_per_entry = sims_per_entry
     print("Using {} sims per entry.".format(sims_per_entry))
 
@@ -164,26 +165,38 @@ class PSROSolver(abstract_meta_trainer.AbstractMetaTrainer):
     super(PSROSolver, self).__init__(
         game,
         oracle,
-        opp_dist_size,
+        N,
         initial_policies,
         meta_strategy_method,
         training_strategy_selector,
         number_policies_selected=number_policies_selected,
         **kwargs)
 
-  def _initialize_policy(self, initial_policies):
+  def _initialize_policy(self, initial_policies,N): ##called at beginning of abstract meta trainer class 
     self._policies = [[] for k in range(self._num_players)] 
-    self._new_policies = [([initial_policies[k]] if initial_policies else  #new policies = initial policies or random
-                           [policy.UniformRandomPolicy(self._game)])
-                          for k in range(self._num_players)]
+    policy_list = [policy.UniformRandomPolicy(self._game) for _ in range(N)]
 
-  def _initialize_game_state(self):
-    effective_payoff_size = self._game_num_players 
-    self._meta_games = [
-        np.array(utils.empty_list_generator(effective_payoff_size)) #[ [[]] [[]] ] if 2
-        for _ in range(effective_payoff_size)
-    ]
+    if initial_policies:
+      assert len(initial_policies) == self._num_players
+        
+    self._policies = [(initial_policies[k] if initial_policies else   
+                           policy_list) for k in range(self._num_players)]
+  
+  def _initialize_game_state(self, N):
+    #initial utils
+    self._meta_games = [np.zeros([N,N]),np.zeros([N,N])]  #initialize payoff table to be [NxN,NxN]
+    #self._graph = np.array([[1/self.N]*self.N]*self.N) #np.zeros([N,N])      
+    self._graph = np.array([[1,2,3,4],[5,6,7,8],[9,10,11,12],[13,14,15,16]])
+    assert self._graph.shape[0] == self._graph.shape[1]               #make sure graph is square 
+    assert self._meta_games[0].shape == self._meta_games[1].shape #make sure matrix is square 
     self.update_empirical_gamestate(seed=None)
+
+    #for i in range(2,N+1):
+    #  start = utils[1:i,1:i]
+      #get meta strategy on meta game matrix (payoff table)
+    #assert utils
+
+    #initial_policy = random
 
   def get_joint_policy_ids(self):
     """Returns a list of integers enumerating all joint meta strategies."""
@@ -351,6 +364,10 @@ class PSROSolver(abstract_meta_trainer.AbstractMetaTrainer):
       self._policies = [self._policies[0]]
       self._num_players = 1
 
+  def get_meta_game(self):
+    """Returns the meta game matrix."""
+    return self._meta_games
+
   def update_empirical_gamestate(self, seed=None):
     """Given new agents in _new_policies, update meta_games through simulations.
 
@@ -370,25 +387,11 @@ class PSROSolver(abstract_meta_trainer.AbstractMetaTrainer):
       # update to function normally.
       self._policies = self._game_num_players * self._policies
       self._new_policies = self._game_num_players * self._new_policies
-      self._num_players = self._game_num_players
-
-    # Concatenate both lists.
-    updated_policies = [
-        self._policies[k] + self._new_policies[k]
-        for k in range(self._num_players)
-    ]
+      self._num_players = self._game_num_players    
 
     # Each metagame will be (num_strategies)^self._num_players.
     # There are self._num_player metagames, one per player.
-    total_number_policies = [
-        len(updated_policies[k]) for k in range(self._num_players)
-    ]
-    number_older_policies = [
-        len(self._policies[k]) for k in range(self._num_players)
-    ]
-    number_new_policies = [
-        len(self._new_policies[k]) for k in range(self._num_players)
-    ]
+    total_number_policies = [self.N,self.N]
 
     # Initializing the matrix with nans to recognize unestimated states.
     meta_games = [
@@ -396,43 +399,40 @@ class PSROSolver(abstract_meta_trainer.AbstractMetaTrainer):
         for k in range(self._num_players)
     ]
 
-    # Filling the matrix with already-known values.
-    older_policies_slice = tuple(
-        [slice(len(self._policies[k])) for k in range(self._num_players)])
-    for k in range(self._num_players):
-      meta_games[k][older_policies_slice] = self._meta_games[k]
-    
-    #NOTE: after this
+    print(meta_games)
 
     # Filling the matrix for newly added policies.
     for current_player in range(self._num_players):
+
       # Only iterate over new policies for current player ; compute on every
       # policy for the other players.
       range_iterators = [
-          range(total_number_policies[k]) for k in range(current_player)
-      ] + [range(number_new_policies[current_player])] + [
           range(total_number_policies[k])
-          for k in range(current_player + 1, self._num_players)
+          for k in range(1, self._num_players)
+      ] + [
+          range(total_number_policies[k])
+          for k in range(1, self._num_players)
       ]
-      for current_index in itertools.product(*range_iterators):
+      
+      for current_index in itertools.product(*range_iterators): #(0, 0)(0, 1)(0, 2)(0, 3)(1, 0)(1, 1)(1, 2)(1, 3)
         used_index = list(current_index)
-        used_index[current_player] += number_older_policies[current_player]
+        #used_index[current_player] += number_older_policies[current_player]
         if np.isnan(meta_games[current_player][tuple(used_index)]):
-          estimated_policies = [
-              updated_policies[k][current_index[k]]
-              for k in range(current_player)
-          ] + [
-              self._new_policies[current_player][current_index[current_player]]
-          ] + [
-              updated_policies[k][current_index[k]]
-              for k in range(current_player + 1, self._num_players)
-          ]
+          #print(self._policies[0]._policy._latent)
+          current_self_latent = self._graph[used_index[0]]  #row of self interaction graph corresponding to payoff table index 
+          current_opponent_latent = self._graph[used_index[1]] #row of opponent interaction graph corresponding to payoff table index 
 
+          self._policies[0]._policy.set_latent(current_self_latent)  #NOTE: hardcoded to 2 players
+          self._policies[1]._policy.set_latent(current_opponent_latent)  #NOTE: hardcoded to 2 players
+
+          #print(self._policies)
+          #print(self._policies[0]._policy._latent)
+          
           if self.symmetric_game:
             # TODO(author4): This update uses ~2**(n_players-1) * sims_per_entry
             # samples to estimate each payoff table entry. This should be
             # brought to sims_per_entry to coincide with expected behavior.
-            utility_estimates = self.sample_episodes(estimated_policies,
+            utility_estimates = self.sample_episodes(self._policies,
                                                      self._sims_per_entry)
 
             player_permutations = list(itertools.permutations(list(range(
@@ -446,8 +446,7 @@ class PSROSolver(abstract_meta_trainer.AbstractMetaTrainer):
                     permutation[player]] / len(player_permutations)
           else:
             #NOTE: estimated policies = same
-
-            utility_estimates = self.sample_episodes(estimated_policies,  #NOTE: different
+            utility_estimates = self.sample_episodes(self._policies, #NOTE: different
                                                      self._sims_per_entry)
 
             for k in range(self._num_players):
@@ -462,8 +461,8 @@ class PSROSolver(abstract_meta_trainer.AbstractMetaTrainer):
       self._num_players = 1
 
     self._meta_games = meta_games #NOTE: different 
-    self._policies = updated_policies
-    #import pdb; pdb.set_trace()
+    print(meta_games)
+    print(self._graph)
     return meta_games
 
   def get_meta_game(self):
