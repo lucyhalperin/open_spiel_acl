@@ -95,8 +95,7 @@ class DQN(rl_agent.AbstractAgent):
 
     # Keep track of the last training loss achieved in an update step.
     self._last_loss_value = None
-    self._latent = [0,0,0,1]  #TODO: change from random
-
+    #self._latent = [0,0,0,1]  #TODO: change from random
 
     # Create required TensorFlow placeholders to perform the Q-network updates.
     self._info_state_ph = tf.placeholder(
@@ -206,7 +205,6 @@ class DQN(rl_agent.AbstractAgent):
     Returns:
       A `rl_agent.StepOutput` containing the action probs and chosen action.
     """
-
     # Act step: don't act at terminal info states or if its not our turn.
     if (not time_step.last()) and (
         time_step.is_simultaneous_move() or
