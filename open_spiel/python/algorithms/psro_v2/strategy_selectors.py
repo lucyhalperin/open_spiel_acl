@@ -84,8 +84,12 @@ def filter_function_factory(filter_function):
         containing the list indexes of selected policies.
 
     """
-    policies = solver.get_policies()
+    if solver.N != 0:
+      print(solver.get_policies())
+      policies = [[solver.get_policies()[0]],[solver.get_policies()[1]]]
+
     num_players = len(policies)
+    print(num_players)
     meta_strategy_probabilities = solver.get_meta_strategies()
 
     used_policies = []

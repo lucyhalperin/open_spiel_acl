@@ -72,9 +72,9 @@ def sample_episode(state, policies):
   if state.is_simultaneous_node():
     actions = [None] * state.num_players()
     for player in range(state.num_players()):
-      latent = policies[player]._policy._latent
+      latent = policies[player][0]._policy._latent
       print(player, latent)
-      state_policy = policies[player](state, latent, player) #TODO: check
+      state_policy = policies[player][0](state, latent, player) #TODO: check
       outcomes, probs = zip(*state_policy.items())
       actions[player] = utils.random_choice(outcomes, probs)
     state.apply_actions(actions)
@@ -85,9 +85,9 @@ def sample_episode(state, policies):
   else:
     player = state.current_player()
 
-    latent = policies[player]._policy._latent
+    latent = policies[player][0]._policy._latent
 
-    state_policy = policies[player](state,latent)  #from policy.py, calling does self.action_probabilities(state, player_id)
+    state_policy = policies[player][0](state,latent)  #from policy.py, calling does self.action_probabilities(state, player_id)
 
     outcomes, probs = zip(*state_policy.items())
   

@@ -47,8 +47,7 @@ def freeze_all(policies_per_player):
     policies_per_player: List of list of number of policies.
   """
   for policies in policies_per_player:
-    for pol in policies:
-      pol.freeze()
+    policies.freeze()
 
 
 def random_count_weighted_choice(count_weight):
@@ -145,77 +144,14 @@ class RLOracle(optimization_oracle.AbstractOracle):
     # The oracle has terminated when all policies have at least trained for
     # self._number_training_episodes. Given the stochastic nature of our
     # training, some policies may have more training episodes than that value.
-    return np.all(
-        episodes_per_oracle.reshape(-1) > self._number_training_episodes)
 
-  def sample_policies_for_episode(self, new_policies, training_parameters,
-                                  episodes_per_oracle, strategy_sampler):
-    """Randomly samples a set of policies to run during the next episode.
+    return episodes_per_oracle > self._number_training_episodes
 
-    Note : sampling is biased to select players & strategies that haven't
-    trained as much as the others.
-
-    Args:
-      new_policies: The currently training policies, list of list, one per
-        player.
-      training_parameters: List of list of training parameters dictionaries, one
-        list per player, one dictionary per training policy.
-      episodes_per_oracle: List of list of integers, computing the number of
-        episodes trained on by each policy. Used to weight the strategy
-        sampling.
-      strategy_sampler: Sampling function that samples a joint strategy given
-        probabilities.
-
-    Returns:
-      Sampled list of policies (One policy per player), index of currently
-      training policies in the list.
-    """
-    num_players = len(training_parameters)
-
-    # Prioritizing players that haven't had as much training as the others.
-    episodes_per_player = [sum(episodes) for episodes in episodes_per_oracle]
-    chosen_player = random_count_weighted_choice(episodes_per_player)
-
-    # Uniformly choose among the sampled player.
-    agent_chosen_ind = np.random.randint(
-        0, len(training_parameters[chosen_player]))
-    agent_chosen_dict = training_parameters[chosen_player][agent_chosen_ind]
-    new_policy = new_policies[chosen_player][agent_chosen_ind]
-
-    # Sample other players' policies.
-    total_policies = agent_chosen_dict["total_policies"]
-    probabilities_of_playing_policies = agent_chosen_dict[
-        "probabilities_of_playing_policies"]
-    episode_policies = strategy_sampler(total_policies,
-                                        probabilities_of_playing_policies)
-
-    live_agents_player_index = [(chosen_player, agent_chosen_ind)]
-
-    for player in range(num_players):
-      if player == chosen_player:
-        episode_policies[player] = new_policy
-        assert not new_policy.is_frozen()
-      else:
-        # Sample a bernoulli with parameter 'self_play_proportion' to determine
-        # whether we do self-play with 'player'.
-        if np.random.binomial(1, self._self_play_proportion):
-          # If we are indeed doing self-play on that round, sample among the
-          # trained strategies of current_player, with priority given to less-
-          # selected agents.
-          agent_index = random_count_weighted_choice(
-              episodes_per_oracle[player])
-          self_play_agent = new_policies[player][agent_index]
-          episode_policies[player] = self_play_agent
-          live_agents_player_index.append((player, agent_index))
-        else:
-          assert episode_policies[player].is_frozen()
-
-    return episode_policies, live_agents_player_index
-
+  
   def _rollout(self, game, agents, **oracle_specific_execution_kwargs):
     self.sample_episode(None, agents, is_evaluation=False)
 
-  def generate_new_policies(self, training_parameters):
+  def generate_new_policies(self, pol):
     """Generates new policies to be trained into best responses.
 
     Args:
@@ -226,28 +162,41 @@ class RLOracle(optimization_oracle.AbstractOracle):
       List of list of the new policies, following the same structure as
       training_parameters.
     """
-    new_policies = []
-    for player in range(len(training_parameters)): #policy, total_policies, current plyer, prob of playing policies 
-      player_parameters = training_parameters[player]
-      new_pols = []
-      for param in player_parameters:
-        current_pol = param["policy"]
-        if isinstance(current_pol, self._best_response_class):
-          new_pol = current_pol.copy_with_noise(self._kwargs.get("sigma", 0.0))
-        else:
-          new_pol = self._best_response_class(self._env, player,
-                                              **self._best_response_kwargs)
-          new_pol.unfreeze()
-        new_pols.append(new_pol)
-      new_policies.append(new_pols)
-    return new_policies
+    new_pols = []
+    current_pol = pol
+    if isinstance(current_pol, self._best_response_class):
+      new_pol = current_pol.copy_with_noise(self._kwargs.get("sigma", 0.0))
+    else:
+      new_pol = self._best_response_class(self._env, 1,  #player 0?
+                                          **self._best_response_kwargs)
+      new_pol.unfreeze()
+    new_pols.append(new_pol)
+    return new_pols
 
-  def generate_new_policies_test(self, training_parameters):
-    pass
+  def generate_agents_for_rollout(self, pol,strategy_sampler, graph,index):
+
+    #set oracle (self agent) to be have latent = sigma! 
+    oracle = self.new_policies[0]
+    latent = graph[index]
+    oracle._policy.set_latent(latent)
+    assert not oracle.is_frozen() #make sure oracle is not frozen
+    assert sum(latent) == 1
+
+    #get opponent policy 
+    opponent = pol[0]    #TODO: should I update this to be new policy?!?!
+    indices = [i for i in range(opponent._policy._N)] #TODO make N
+
+    # Sample interaction graph to set opponent latent variable for the episode
+    episode_opp_latent = strategy_sampler([indices],[latent])[0]
+    opponent._policy.set_latent(graph[episode_opp_latent])  
+    assert opponent.is_frozen()       #make sure opponent is frozen
+
+    return [opponent, oracle]
 
   def __call__(self,
+               graph,
                game,
-               training_parameters,
+               pol,
                strategy_sampler=utils.sample_strategy,
                **oracle_specific_execution_kwargs):
     """Call method for oracle, returns best responses against a set of policies.
@@ -258,7 +207,7 @@ class RLOracle(optimization_oracle.AbstractOracle):
         each dictionary containing the following fields :
         - policy : the policy from which to start training.
         - total_policies: A list of all policy.Policy strategies used for
-          training, including the one for the current player.
+          training, including the one for the current player.int
         - current_player: Integer representing the current player.
         - probabilities_of_playing_policies: A list of arrays representing, per
           player, the probabilities of playing each policy in total_policies for
@@ -275,24 +224,21 @@ class RLOracle(optimization_oracle.AbstractOracle):
       A list of list, one for each member of training_parameters, of (epsilon)
       best responses.
     """
-    episodes_per_oracle = [[0
-                            for _ in range(len(player_params))]
-                           for player_params in training_parameters]
-    episodes_per_oracle = np.array(episodes_per_oracle)
+                           
+    episodes_per_oracle = 0
+    self.new_policies = self.generate_new_policies(pol) #initalize new policies to LEARN 
+    assert len(self.new_policies) == 1                  #make sure only one new policy
 
-    new_policies = self.generate_new_policies(training_parameters) #initalize new policies 
+    for index in range(graph.shape[0]):
+      print("training row " + str(index) + " of interaction graph")
+      while not self._has_terminated(episodes_per_oracle):    #train new policies
+        agents = self.generate_agents_for_rollout(pol,strategy_sampler, graph, index) #[agent 0 row, agent 1 row]
+        self._rollout(game, agents, **oracle_specific_execution_kwargs)
+        episodes_per_oracle += 1
 
-    # TODO(author4): Look into multithreading.
-    while not self._has_terminated(episodes_per_oracle):    #train new policies
-      agents, indexes = self.sample_policies_for_episode(
-          new_policies, training_parameters, episodes_per_oracle,
-          strategy_sampler)
-      self._rollout(game, agents, **oracle_specific_execution_kwargs)
-      episodes_per_oracle = update_episodes_per_oracles(episodes_per_oracle,
-                                                        indexes)
     # Freeze the new policies to keep their weights static. This allows us to
     # later not have to make the distinction between static and training
     # policies in training iterations.
-    freeze_all(new_policies)
+    freeze_all(self.new_policies)
     
-    return new_policies
+    return self.new_policies
