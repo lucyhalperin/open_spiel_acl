@@ -168,6 +168,7 @@ class AbstractMetaTrainer(object):
 
     meta_strategy_method = _process_string_or_callable(
         meta_strategy_method, meta_strategies.META_STRATEGY_METHODS)
+
     print("Using {} as strategy method.".format(meta_strategy_method))
 
     self._training_strategy_selector = _process_string_or_callable(
@@ -177,13 +178,11 @@ class AbstractMetaTrainer(object):
         self._training_strategy_selector))
 
     self._meta_strategy_method = meta_strategy_method
-    print(meta_strategy_method)
     self._kwargs = kwargs
-
     self._initialize_policy(initial_policies,self.N)
-    #self._initial_interaction_graph(5) #NOTE: added 
     self._initialize_game_state(self.N)
     self.update_meta_strategies()
+    print("strats",self._meta_strategy_probabilities)
 
   def _initialize_policy(self, initial_policies):
     return NotImplementedError(

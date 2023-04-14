@@ -124,7 +124,7 @@ flags.DEFINE_bool("verbose", True, "Enables verbose printing and profiling.")
 flags.DEFINE_bool("training", False, "Whether Training or Testing")
 
 #NeuPL
-flags.DEFINE_integer("N", 4, "policy population size")
+flags.DEFINE_integer("N", 8, "policy population size")
 
 def init_pg_responder(sess, env):
   """Initializes the Policy Gradient-based responder and agents."""
@@ -318,7 +318,7 @@ def gpsro_looper(env, oracle, agents):
   
   #save meta_probabilities
   meta_probabilities = g_psro_solver.get_meta_strategies()
-  np.savetxt('./test_conditional/' + FLAGS.game_name + '/meta_probabilities.csv', meta_probabilities, delimiter=',')
+  #np.savetxt('./test_conditional/' + FLAGS.game_name + '/meta_probabilities.csv', meta_probabilities, delimiter=',')
 
 def testing(result_type,aggr_policies,agents,stationary_basis,game):
   assert result_type in ["eq_vs_eq","eq_vs_Sbasis","eq_vs_random","eq_vs_NSbasis"]

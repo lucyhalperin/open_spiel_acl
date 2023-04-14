@@ -180,7 +180,8 @@ class RLOracle(optimization_oracle.AbstractOracle):
     latent = graph[index]
     oracle._policy.set_latent(latent)
     assert not oracle.is_frozen() #make sure oracle is not frozen
-    assert sum(latent) == 1
+    if index != 0:
+      assert sum(latent) == 1
 
     #get opponent policy 
     opponent = pol[0]    #TODO: should I update this to be new policy?!?!

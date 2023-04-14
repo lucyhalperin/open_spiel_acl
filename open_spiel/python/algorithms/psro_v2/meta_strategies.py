@@ -125,27 +125,62 @@ def nash_strategy(solver, return_joint=False):
   Returns:
     Nash distribution on strategies.
   """
-  meta_games = solver.get_meta_game()
-  if not isinstance(meta_games, list):
-    meta_games = [meta_games, -meta_games]
-  meta_games = [x.tolist() for x in meta_games]
-  if len(meta_games) != 2:
-    raise NotImplementedError(
-        "nash_strategy solver works only for 2p zero-sum"
-        "games, but was invoked for a {} player game".format(len(meta_games)))
-  nash_prob_1, nash_prob_2, _, _ = (
-      lp_solver.solve_zero_sum_matrix_game(
-          pyspiel.create_matrix_game(*meta_games)))
-  result = [
-      renormalize(np.array(nash_prob_1).reshape(-1)),
-      renormalize(np.array(nash_prob_2).reshape(-1))
-  ]
+  if solver.N == 0: 
+    meta_games = solver.get_meta_game()
+    if not isinstance(meta_games, list):
+      meta_games = [meta_games, -meta_games]
+    meta_games = [x.tolist() for x in meta_games]
+    if len(meta_games) != 2:
+      raise NotImplementedError(
+          "nash_strategy solver works only for 2p zero-sum"
+          "games, but was invoked for a {} player game".format(len(meta_games)))
+    nash_prob_1, nash_prob_2, _, _ = (
+        lp_solver.solve_zero_sum_matrix_game(
+            pyspiel.create_matrix_game(*meta_games)))
+    result = [
+        renormalize(np.array(nash_prob_1).reshape(-1)),
+        renormalize(np.array(nash_prob_2).reshape(-1))
+    ]
 
-  if not return_joint:
-    return result
+    if not return_joint:
+      return result
+    else:
+      joint_strategies = get_joint_strategy_from_marginals(result)
+      return result, joint_strategies
   else:
-    joint_strategies = get_joint_strategy_from_marginals(result)
-    return result, joint_strategies
+    #initialize empty graph
+    new_graph = [np.zeros(solver.N)] 
+
+    #copy pseudo code from algorithm 3 in neupl paper 
+    for i in range(1,solver.N):
+      meta_games = solver.get_meta_game()
+
+      #make subset of meta game (see line 4 of psuedo code)
+      small_meta_game = [meta_games[0][0:i,0:i],meta_games[1][0:i,0:i]]
+      if not isinstance(small_meta_game, list):
+        small_meta_game = [small_meta_game, -small_meta_game]
+      small_meta_game = [x.tolist() for x in small_meta_game]
+      if len(small_meta_game) != 2:
+        raise NotImplementedError(
+            "nash_strategy solver works only for 2p zero-sum"
+            "games, but was invoked for a {} player game".format(len(small_meta_game)))
+      nash_prob_1, nash_prob_2, _, _ = (
+          lp_solver.solve_zero_sum_matrix_game(
+              pyspiel.create_matrix_game(*small_meta_game)))
+      result = [
+          renormalize(np.array(nash_prob_1).reshape(-1)),
+          renormalize(np.array(nash_prob_2).reshape(-1))
+      ]
+
+      assert sum(result[0]) == 1
+
+      if not return_joint:
+          new_graph.append(result[0].append([0]*solver.N-i))  #fill in rest of the row with 0s (i.e [p,1-p] --> [1,1-p,0,0])
+      else:
+        joint_strategies = get_joint_strategy_from_marginals(result)
+        new_graph.append(np.concatenate((result[0],np.zeros(solver.N-i))))  #fill in rest of the row with 0s (i.e [p,1-p] --> [1,1-p,0,0])
+
+    return np.array(new_graph), None
 
 
 def prd_strategy(solver, return_joint=False):

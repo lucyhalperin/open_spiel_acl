@@ -142,7 +142,7 @@ class PSROSolver(abstract_meta_trainer.AbstractMetaTrainer):
     self._rectify_training = self._rectifier
     print("Rectifier : {}".format(rectifier))
 
-    self._meta_strategy_probabilities = np.array([])
+    self._meta_strategy_probabilities = np.zeros([N,N]) #TODO: fix
     self._non_marginalized_probabilities = np.array([])
 
     print("Perturbating oracle outputs : {}".format(n_noisy_copies > 0))
@@ -185,17 +185,11 @@ class PSROSolver(abstract_meta_trainer.AbstractMetaTrainer):
   def _initialize_game_state(self, N):
     #initial utils
     self._meta_games = [np.zeros([N,N]),np.zeros([N,N])]  #initialize payoff table to be [NxN,NxN]
-    #self._graph = np.array([[1/self.N]*self.N]*self.N) #np.zeros([N,N])      
-    self._graph = np.array([[0.25,0.25,0.25,0.25],[0.1,0,0.5,0.4],[0.2,0.3,0.4,0.2],[1.,0,0,0]])
-    assert self._graph.shape[0] == self._graph.shape[1]               #make sure graph is square 
+    assert self._meta_strategy_probabilities.shape[0] == self._meta_strategy_probabilities.shape[1]               #make sure graph is square 
     assert self._meta_games[0].shape == self._meta_games[1].shape == (self.N,self.N) #make sure matrix is NxN 
     self.update_empirical_gamestate(seed=None)
 
-    #for i in range(2,N+1):
-    #  start = utils[1:i,1:i]
-      #get meta strategy on meta game matrix (payoff table)
-    #assert utils
-
+   
   def get_joint_policy_ids(self):
     """Returns a list of integers enumerating all joint meta strategies."""
     return utils.get_strategy_profile_ids(self._meta_games)
@@ -226,7 +220,7 @@ class PSROSolver(abstract_meta_trainer.AbstractMetaTrainer):
     if self.symmetric_game:
       self._policies = self._policies * self._game_num_players  #[[],[]]*2 --> [[], [], [], []]
 
-    self._meta_strategy_probabilities, self._non_marginalized_probabilities = (
+    self._meta_strategy_probabilities, self._non_marginalized_probabilities = ( ##TODO: fix 
         self._meta_strategy_method(solver=self, return_joint=True))  #psro-v2.meta_strategies has meta strat methods 
 
     if self.symmetric_game:
@@ -302,7 +296,7 @@ class PSROSolver(abstract_meta_trainer.AbstractMetaTrainer):
 
     The resulting policies are appended to self._new_policies.
     """
-    
+   
     (sample_strategy,
      total_policies,
      probabilities_of_playing_policies) = self.get_policies_and_strategies()
@@ -315,75 +309,9 @@ class PSROSolver(abstract_meta_trainer.AbstractMetaTrainer):
 
     # List of List of new policies (One list per player)
     self._new_policies = self._oracle(
-        self._graph,
+        self._meta_strategy_probabilities,
         self._game,
         pol,
-        strategy_sampler=sample_strategy,
-        using_joint_strategies=self._rectify_training or
-        not self.sample_from_marginals)
-
-    if self.symmetric_game:
-      # In a symmetric game, only one population is kept. The below lines
-      # therefore make PSRO consider only the first player during training,
-      # since both players are identical.
-      self._policies = [self._policies[0]]
-      self._num_players = 1
-
-  def update_agents_old(self):
-    """Updates policies for each player at the same time by calling the oracle.
-
-    The resulting policies are appended to self._new_policies.
-    """
-    #used_policies, used_indexes = self._training_strategy_selector(
-    #    self, self._number_policies_selected)
-    
-    (sample_strategy,
-     total_policies,
-     probabilities_of_playing_policies) = self.get_policies_and_strategies()
-
-    print(total_policies)
-
-    # Contains the training parameters of all trained oracles.
-    # This is a list (Size num_players) of list (Size num_new_policies[player]),
-    # each dict containing the needed information to train a new best response.
-    training_parameters = [[] for _ in range(self._num_players)]
-
-    for current_player in range(self._num_players):
-      if self.sample_from_marginals:
-        currently_used_policies = used_policies[current_player]
-        current_indexes = used_indexes[current_player]
-      else:
-        currently_used_policies = [
-            joint_policy[current_player] for joint_policy in used_policies
-        ]
-        current_indexes = used_indexes[current_player]
-
-      for i in range(len(currently_used_policies)):
-        pol = currently_used_policies[i]
-        ind = current_indexes[i]
-
-        new_probabilities = self._restrict_target_training(
-            current_player, ind, total_policies,
-            probabilities_of_playing_policies,
-            self._rectify_training)
-
-        new_parameter = {
-            "policy": pol,
-            "total_policies": total_policies,
-            "current_player": current_player,
-            "probabilities_of_playing_policies": new_probabilities
-        }
-        training_parameters[current_player].append(new_parameter)
-
-    if self.symmetric_game:
-      self._policies = self._game_num_players * self._policies
-      self._num_players = self._game_num_players
-      training_parameters = [training_parameters[0]]
-
-    # List of List of new policies (One list per player)
-    self._new_policies = self._oracle(
-        self._game,
-        training_parameters,
         strategy_sampler=sample_strategy,
         using_joint_strategies=self._rectify_training or
         not self.sample_from_marginals)
@@ -438,8 +366,8 @@ class PSROSolver(abstract_meta_trainer.AbstractMetaTrainer):
 
         if np.isnan(meta_games[current_player][tuple(used_index)]):
 
-          current_self_latent = self._graph[used_index[0]]  #row of self interaction graph corresponding to payoff table index 
-          current_opponent_latent = self._graph[used_index[1]] #row of opponent interaction graph corresponding to payoff table index 
+          current_self_latent = self._meta_strategy_probabilities[used_index[0]]  #row of self interaction graph corresponding to payoff table index 
+          current_opponent_latent = self._meta_strategy_probabilities[used_index[1]] #row of opponent interaction graph corresponding to payoff table index 
           self._policies[0][0]._policy.set_latent(current_self_latent)  #NOTE: hardcoded to 2 players - does this need to be a copy 
           self._policies[1][0]._policy.set_latent(current_opponent_latent)  #NOTE: hardcoded to 2 players - v
           
@@ -473,16 +401,11 @@ class PSROSolver(abstract_meta_trainer.AbstractMetaTrainer):
       self._num_players = 1
 
     self._meta_games = meta_games  
-    print(meta_games)
-    print(self._graph)
+   
     #TODO: assert policies have not learned! 
     #TODO: assert that dependence on latent variable exists (in later iterations of training, does dif latent variable give dif result)
     assert self._meta_games[0].shape == self._meta_games[1].shape == (self.N,self.N) #make sure matrix is NxN 
     return meta_games
-
-  def get_meta_game(self):
-    """Returns the meta game matrix."""
-    return self._meta_games
 
   @property
   def meta_games(self):
