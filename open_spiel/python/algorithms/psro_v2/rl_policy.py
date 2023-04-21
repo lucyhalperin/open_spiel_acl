@@ -66,7 +66,7 @@ def rl_policy_factory(rl_class):
       return time_step
     
     
-    def action_probabilities(self, state, player_id=None):
+    def action_probabilities(self, state, player_id=None): #TODO: should latent be in here?
       cur_player = state.current_player()
       legal_actions = state.legal_actions(cur_player)
 

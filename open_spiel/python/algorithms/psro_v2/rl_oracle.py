@@ -240,6 +240,11 @@ class RLOracle(optimization_oracle.AbstractOracle):
     # Freeze the new policies to keep their weights static. This allows us to
     # later not have to make the distinction between static and training
     # policies in training iterations.
+    second_player = self.new_policies[0].copy_with_noise(sigma=0.0) #create second policy to use during updating empirical game state 
+    second_player._policy.player_id = 0                             #set id equal to 0 
+    self.new_policies.append(second_player)                         #freeze policies 
     freeze_all(self.new_policies)
+    
+    self.new_policies = [[self.new_policies[1]],[self.new_policies[0]]] #TODO: fix this weird syntax fix 
     
     return self.new_policies

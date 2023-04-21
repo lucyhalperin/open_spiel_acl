@@ -124,7 +124,7 @@ flags.DEFINE_bool("verbose", True, "Enables verbose printing and profiling.")
 flags.DEFINE_bool("training", False, "Whether Training or Testing")
 
 #NeuPL
-flags.DEFINE_integer("N", 8, "policy population size")
+flags.DEFINE_integer("N", 5, "policy population size")
 
 def init_pg_responder(sess, env):
   """Initializes the Policy Gradient-based responder and agents."""

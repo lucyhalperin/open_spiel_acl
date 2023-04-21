@@ -133,7 +133,7 @@ class PSROSolver(abstract_meta_trainer.AbstractMetaTrainer):
       **kwargs: kwargs for meta strategy computation and training strategy
         selection.
     """
-    self.N=N
+    self.N=N #number of policies in population 
     self._sims_per_entry = sims_per_entry
     print("Using {} sims per entry.".format(sims_per_entry))
 
@@ -172,9 +172,9 @@ class PSROSolver(abstract_meta_trainer.AbstractMetaTrainer):
         number_policies_selected=number_policies_selected,
         **kwargs)
 
-  def _initialize_policy(self, initial_policies,N): ##called at beginning of abstract meta trainer class 
+  def _initialize_policy(self, initial_policies): ##called at beginning of abstract meta trainer class 
     self._policies = [[] for k in range(self._num_players)] 
-    policy_list = [policy.UniformRandomPolicy(self._game) for _ in range(N)]
+    policy_list = [policy.UniformRandomPolicy(self._game) for _ in range(self.N)]
 
     if initial_policies:
       assert len(initial_policies) == self._num_players
@@ -182,11 +182,10 @@ class PSROSolver(abstract_meta_trainer.AbstractMetaTrainer):
     self._policies = [([initial_policies[k]] if initial_policies else   
                            policy_list) for k in range(self._num_players)]
   
-  def _initialize_game_state(self, N):
-    #initial utils
-    self._meta_games = [np.zeros([N,N]),np.zeros([N,N])]  #initialize payoff table to be [NxN,NxN]
-    assert self._meta_strategy_probabilities.shape[0] == self._meta_strategy_probabilities.shape[1]               #make sure graph is square 
-    assert self._meta_games[0].shape == self._meta_games[1].shape == (self.N,self.N) #make sure matrix is NxN 
+  def _initialize_game_state(self):
+    self._meta_games = [np.zeros([self.N,self.N]),np.zeros([self.N,self.N])]  #initialize payoff table to be [NxN,NxN]
+    assert self._meta_games[0].shape == self._meta_games[1].shape == (self.N,self.N) #make sure matrix is square 
+    assert self._meta_strategy_probabilities.shape[0] == self._meta_strategy_probabilities.shape[1] #make sure graph is square 
     self.update_empirical_gamestate(seed=None)
 
    
@@ -305,24 +304,17 @@ class PSROSolver(abstract_meta_trainer.AbstractMetaTrainer):
     # This is a list (Size num_players) of list (Size num_new_policies[player]),
     # each dict containing the needed information to train a new best response.
       
-    pol = self._policies[0]      
+    pol = self._policies[0]     
 
     # List of List of new policies (One list per player)
-    self._new_policies = self._oracle(
+    self._policies = self._oracle(
         self._meta_strategy_probabilities,
         self._game,
         pol,
         strategy_sampler=sample_strategy,
         using_joint_strategies=self._rectify_training or
         not self.sample_from_marginals)
-
-    if self.symmetric_game:
-      # In a symmetric game, only one population is kept. The below lines
-      # therefore make PSRO consider only the first player during training,
-      # since both players are identical.
-      self._policies = [self._policies[0]]
-      self._num_players = 1
-
+             
   def get_meta_game(self):
     """Returns the meta game matrix."""
     return self._meta_games
@@ -340,13 +332,8 @@ class PSROSolver(abstract_meta_trainer.AbstractMetaTrainer):
       np.random.seed(seed=seed)
     assert self._oracle is not None
 
-    if self.symmetric_game:
-      # Switch to considering the game as a symmetric game where players have
-      # the same policies & new policies. This allows the empirical gamestate
-      # update to function normally.
-      self._policies = self._game_num_players * self._policies
-      self._new_policies = self._game_num_players * self._new_policies
-      self._num_players = self._game_num_players    
+    assert self._meta_strategy_probabilities.shape[0] == self._meta_strategy_probabilities.shape[1] #make sure interaction graph is square  
+    assert len(self._policies) == 2 #make sure only two agents
 
     # Initializing the matrix with nans to recognize unestimated states.
     # There are self._num_player metagames, one per player.
@@ -354,55 +341,35 @@ class PSROSolver(abstract_meta_trainer.AbstractMetaTrainer):
         np.full(tuple([self.N,self.N]), np.nan)
         for k in range(self._num_players)
     ]
-
     # Filling the matrix for updates policies.
-    for current_player in range(self._num_players):
       
-      #[range(0,N), range(0,N)]
-      range_iterators = [range(0,self.N), range(0,self.N)]  
+    range_iterators = [range(0,self.N), range(0,self.N)]  #[range(0,N), range(0,N)]
 
-      for current_index in itertools.product(*range_iterators): #(0, 0)(0, 1)(0, 2)(0, 3)(1, 0)(1, 1)(1, 2)(1, 3)
-        used_index = list(current_index)
+    for current_index in itertools.product(*range_iterators): #(0, 0)(0, 1)(0, 2)(0, 3)(1, 0)(1, 1)(1, 2)(1, 3)
+      used_index = list(current_index)
 
-        if np.isnan(meta_games[current_player][tuple(used_index)]):
+      if np.isnan(meta_games[0][tuple(used_index)]): #if location of meta_game martrix is nan 
 
-          current_self_latent = self._meta_strategy_probabilities[used_index[0]]  #row of self interaction graph corresponding to payoff table index 
-          current_opponent_latent = self._meta_strategy_probabilities[used_index[1]] #row of opponent interaction graph corresponding to payoff table index 
-          self._policies[0][0]._policy.set_latent(current_self_latent)  #NOTE: hardcoded to 2 players - does this need to be a copy 
-          self._policies[1][0]._policy.set_latent(current_opponent_latent)  #NOTE: hardcoded to 2 players - v
-          
-          if self.symmetric_game:
-           
-            utility_estimates = self.sample_episodes(self._policies,
-                                                     self._sims_per_entry)
+        current_self_latent = self._meta_strategy_probabilities[used_index[0]]  #row of interaction graph corresponding to payoff table index (self)
+        current_opponent_latent = self._meta_strategy_probabilities[used_index[1]] #row of interaction graph corresponding to payoff table index (opponent) 
+        self._policies[0][0]._policy.set_latent(current_self_latent)  #set latent variable of  
+        self._policies[1][0]._policy.set_latent(current_opponent_latent) 
+        
+        assert self._policies[0][0].is_frozen() #make sure self is frozen
+        assert self._policies[1][0].is_frozen() #make sure opponent frozen
+        assert self._policies[0][0]._policy._latent is not None #make sure latent is set 
+        assert self._policies[1][0]._policy._latent is not None #make sure latent is set 
 
-            player_permutations = list(itertools.permutations(list(range(
-                self._num_players))))
-            for permutation in player_permutations:
-              used_tuple = tuple([used_index[i] for i in permutation])
-              for player in range(self._num_players):
-                if np.isnan(meta_games[player][used_tuple]):
-                  meta_games[player][used_tuple] = 0.0
-                meta_games[player][used_tuple] += utility_estimates[
-                    permutation[player]] / len(player_permutations)
-          else:
-            utility_estimates = self.sample_episodes(self._policies, 
-                                                     self._sims_per_entry)
+        #TODO: why do latent values not impact outcome (right now, policy is the same regardless of latent, so they tie every time)
+        
+        utility_estimates = self.sample_episodes(self._policies, #get average score for location in table 
+                                                  self._sims_per_entry) #TODO: QUESTION - how to fill in payoff table (should it just be pi_sig1 vs pi__sig2)
+                                                  
+        for k in range(self._num_players):
+          meta_games[k][tuple(used_index)] = utility_estimates[k]
+    
+    self._meta_games = meta_games 
 
-            for k in range(self._num_players):
-              meta_games[k][tuple(used_index)] = utility_estimates[k]
-
-    if self.symmetric_game:
-      # Make PSRO consider that we only have one population again, as we
-      # consider that we are in a symmetric game (No difference between players)
-      self._policies = [self._policies[0]]
-      self._new_policies = [self._new_policies[0]]
-      updated_policies = [updated_policies[0]]
-      self._num_players = 1
-
-    self._meta_games = meta_games  
-   
-    #TODO: assert policies have not learned! 
     #TODO: assert that dependence on latent variable exists (in later iterations of training, does dif latent variable give dif result)
     assert self._meta_games[0].shape == self._meta_games[1].shape == (self.N,self.N) #make sure matrix is NxN 
     return meta_games

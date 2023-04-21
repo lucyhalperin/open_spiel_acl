@@ -95,7 +95,6 @@ class DQN(rl_agent.AbstractAgent):
 
     # Keep track of the last training loss achieved in an update step.
     self._last_loss_value = None
-    #self._latent = [0,0,0,1]  #TODO: change from random
 
     # Create required TensorFlow placeholders to perform the Q-network updates.
     self._info_state_ph = tf.placeholder(
@@ -122,11 +121,11 @@ class DQN(rl_agent.AbstractAgent):
         name="legal_actions_mask_ph")
 
     self._q_network = simple_nets.MLP(state_representation_size,
-                                      self._layer_sizes, num_actions,N)
+                                      self._layer_sizes, num_actions,self._N)
     self._q_values = self._q_network(self._info_state_ph, self._latent_ph)
 
     self._target_q_network = simple_nets.MLP(state_representation_size,
-                                             self._layer_sizes, num_actions,N)
+                                             self._layer_sizes, num_actions,self._N)
     self._target_q_values = self._target_q_network(self._next_info_state_ph,self._latent_ph)
 
     # Stop gradient to prevent updates to the target network while learning
@@ -134,6 +133,7 @@ class DQN(rl_agent.AbstractAgent):
 
     self._update_target_network = self._create_target_network_update_op(
         self._q_network, self._target_q_network)
+    self._latent = None
 
     # Create the loss operations.
     # Sum a large negative constant to illegal action logits before taking the
@@ -211,9 +211,8 @@ class DQN(rl_agent.AbstractAgent):
         self.player_id == time_step.current_player()):
       info_state = time_step.observations["info_state"][self.player_id]
       legal_actions = time_step.observations["legal_actions"][self.player_id]
-
       epsilon = self._get_epsilon(is_evaluation)
-      action, probs = self._epsilon_greedy(info_state,legal_actions, epsilon)
+      action, probs = self._epsilon_greedy(info_state,legal_actions, epsilon)   ##episolon greedy incorperates latent 
     else:
       action = None
       probs = []
@@ -353,7 +352,7 @@ class DQN(rl_agent.AbstractAgent):
         [self._loss, self._learn_step],
         feed_dict={
             self._info_state_ph: info_states,
-            self._latent_ph: latents,  #TODO: fix to be tied to transition
+            self._latent_ph: latents,  
             self._action_ph: actions,
             self._reward_ph: rewards,
             self._is_final_step_ph: are_final_steps,

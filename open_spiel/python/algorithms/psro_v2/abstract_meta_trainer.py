@@ -73,7 +73,6 @@ def sample_episode(state, policies):
     actions = [None] * state.num_players()
     for player in range(state.num_players()):
       latent = policies[player][0]._policy._latent
-      print(player, latent)
       state_policy = policies[player][0](state, latent, player) #TODO: check
       outcomes, probs = zip(*state_policy.items())
       actions[player] = utils.random_choice(outcomes, probs)
@@ -83,13 +82,14 @@ def sample_episode(state, policies):
   if state.is_chance_node():
     outcomes, probs = zip(*state.chance_outcomes())
   else:
-    player = state.current_player()
-
-    latent = policies[player][0]._policy._latent
-
-    state_policy = policies[player][0](state,latent)  #from policy.py, calling does self.action_probabilities(state, player_id)
-
-    outcomes, probs = zip(*state_policy.items())
+    player = state.current_player() #player whose turn it is 
+    state_policy = policies[player][0](state)  #from policy.py, calling does self.action_probabilities(state), latent appears in step fn within agent in rl_policy.py
+    outcomes, probs = zip(*state_policy.items()) 
+    print(outcomes, probs)
+    # TODO 1. check tensorflow version using here (e.g., print(tensorflow.__version__))
+    # 2. if tensorflow v1.x, then look into how you can print output of network (note this is not as straightforward as print in pytorch)
+    # 3. look into why network output is extremly deterministic (probably network init is wrong)
+    # 4. clone fresh psro and check the network output at initialization for rps
   
   state.apply_action(utils.random_choice(outcomes, probs))
 
@@ -179,8 +179,8 @@ class AbstractMetaTrainer(object):
 
     self._meta_strategy_method = meta_strategy_method
     self._kwargs = kwargs
-    self._initialize_policy(initial_policies,self.N)
-    self._initialize_game_state(self.N)
+    self._initialize_policy(initial_policies)
+    self._initialize_game_state()
     self.update_meta_strategies()
     print("strats",self._meta_strategy_probabilities)
 
@@ -202,7 +202,9 @@ class AbstractMetaTrainer(object):
     self._iterations += 1
     self.update_agents()  # Generate new, Best Response agents via oracle.
     self.update_empirical_gamestate(seed=seed)  # Update gamestate matrix.
+    print(self.meta_games)
     self.update_meta_strategies()  # Compute meta strategy (e.g. Nash)
+    print(self._meta_strategy_probabilities)
 
   def update_meta_strategies(self):
     self._meta_strategy_probabilities = self._meta_strategy_method(self)
@@ -230,8 +232,8 @@ class AbstractMetaTrainer(object):
     """
     totals = np.zeros(self._num_players)
     for _ in range(num_episodes):
-      totals += sample_episode(self._game.new_initial_state(), #NOTE: different 
-                               policies).reshape(-1)
+      totals += sample_episode(self._game.new_initial_state(),policies).reshape(-1)
+    
     return totals / num_episodes
 
   def get_meta_strategies(self):

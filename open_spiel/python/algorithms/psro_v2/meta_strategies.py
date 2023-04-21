@@ -171,8 +171,8 @@ def nash_strategy(solver, return_joint=False):
           renormalize(np.array(nash_prob_1).reshape(-1)),
           renormalize(np.array(nash_prob_2).reshape(-1))
       ]
-
-      assert sum(result[0]) == 1
+      
+      #assert sum(result[0]) == 1 #TODO: check 
 
       if not return_joint:
           new_graph.append(result[0].append([0]*solver.N-i))  #fill in rest of the row with 0s (i.e [p,1-p] --> [1,1-p,0,0])

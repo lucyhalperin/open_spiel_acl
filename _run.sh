@@ -12,7 +12,7 @@ export PYTHONPATH=$PYTHONPATH:/home/lucyh/Documents/ACL/open_spiel_acl/build/pyt
 
 #run code
 python3 open_spiel/python/examples/psro_v2_example.py \
---game_name="kuhn_poker" \
+--game_name="matrix_rps" \
 --seed=1 \
 --n_players=2 \
 --meta_strategy_method="nash" \
