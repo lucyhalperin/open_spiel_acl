@@ -142,7 +142,8 @@ class PSROSolver(abstract_meta_trainer.AbstractMetaTrainer):
     self._rectify_training = self._rectifier
     print("Rectifier : {}".format(rectifier))
 
-    self._meta_strategy_probabilities = np.zeros([N,N]) #TODO: fix
+    self._meta_strategy_probabilities = np.ones([self.N,self.N])/self.N #NOTE: changed
+    #self._meta_strategy_probabilities = np.array([[1,0,0,0],[1,0,0,0],[1,0,0,0],[1,0,0,0]])
     self._non_marginalized_probabilities = np.array([])
 
     print("Perturbating oracle outputs : {}".format(n_noisy_copies > 0))
@@ -174,19 +175,19 @@ class PSROSolver(abstract_meta_trainer.AbstractMetaTrainer):
 
   def _initialize_policy(self, initial_policies): ##called at beginning of abstract meta trainer class 
     self._policies = [[] for k in range(self._num_players)] 
-    policy_list = [policy.UniformRandomPolicy(self._game) for _ in range(self.N)]
 
     if initial_policies:
       assert len(initial_policies) == self._num_players
-        
-    self._policies = [([initial_policies[k]] if initial_policies else   
-                           policy_list) for k in range(self._num_players)]
+
+    self._policies = [initial_policies[0], None]
   
   def _initialize_game_state(self):
-    self._meta_games = [np.zeros([self.N,self.N]),np.zeros([self.N,self.N])]  #initialize payoff table to be [NxN,NxN]
-    assert self._meta_games[0].shape == self._meta_games[1].shape == (self.N,self.N) #make sure matrix is square 
-    assert self._meta_strategy_probabilities.shape[0] == self._meta_strategy_probabilities.shape[1] #make sure graph is square 
-    self.update_empirical_gamestate(seed=None)
+    #self._meta_games = [np.zeros([self.N,self.N]),np.zeros([self.N,self.N])]  #initialize payoff table to be [NxN,NxN]
+
+    #assert self._meta_games[0].shape == self._meta_games[1].shape == (self.N,self.N) #make sure matrix is square 
+    #assert self._meta_strategy_probabilities.shape[0] == self._meta_strategy_probabilities.shape[1] #make sure graph is square 
+    #self.update_empirical_gamestate(seed=None)
+    pass
 
    
   def get_joint_policy_ids(self):
@@ -352,13 +353,14 @@ class PSROSolver(abstract_meta_trainer.AbstractMetaTrainer):
 
         current_self_latent = self._meta_strategy_probabilities[used_index[0]]  #row of interaction graph corresponding to payoff table index (self)
         current_opponent_latent = self._meta_strategy_probabilities[used_index[1]] #row of interaction graph corresponding to payoff table index (opponent) 
-        self._policies[0][0]._policy.set_latent(current_self_latent)  #set latent variable of  
-        self._policies[1][0]._policy.set_latent(current_opponent_latent) 
         
-        assert self._policies[0][0].is_frozen() #make sure self is frozen
-        assert self._policies[1][0].is_frozen() #make sure opponent frozen
-        assert self._policies[0][0]._policy._latent is not None #make sure latent is set 
-        assert self._policies[1][0]._policy._latent is not None #make sure latent is set 
+        self._policies[0]._policy.set_latent(current_self_latent)  #set latent variable of  
+        self._policies[1]._policy.set_latent(current_opponent_latent) 
+        
+        assert self._policies[0].is_frozen() #make sure self is frozen
+        assert self._policies[1].is_frozen() #make sure opponent frozen
+        assert self._policies[0]._policy._latent is not None #make sure latent is set 
+        assert self._policies[1]._policy._latent is not None #make sure latent is set 
 
         #TODO: why do latent values not impact outcome (right now, policy is the same regardless of latent, so they tie every time)
         
@@ -369,6 +371,8 @@ class PSROSolver(abstract_meta_trainer.AbstractMetaTrainer):
           meta_games[k][tuple(used_index)] = utility_estimates[k]
     
     self._meta_games = meta_games 
+    print(self._meta_games)
+    print(self._policies[0]._policy)
 
     #TODO: assert that dependence on latent variable exists (in later iterations of training, does dif latent variable give dif result)
     assert self._meta_games[0].shape == self._meta_games[1].shape == (self.N,self.N) #make sure matrix is NxN 

@@ -86,7 +86,7 @@ from open_spiel.python.algorithms.losses import rl_losses
 tf.disable_v2_behavior()
 
 Transition = collections.namedtuple(
-    "Transition", "info_state action reward discount legal_actions_mask")
+    "Transition", "info_state latent action reward discount legal_actions_mask")
 
 
 class PolicyGradient(rl_agent.AbstractAgent):
@@ -100,6 +100,7 @@ class PolicyGradient(rl_agent.AbstractAgent):
                player_id,
                info_state_size,
                num_actions,
+               N,
                loss_str="a2c",
                loss_class=None,
                hidden_layers_sizes=(128,),
@@ -148,6 +149,8 @@ class PolicyGradient(rl_agent.AbstractAgent):
     self._kwargs = locals()
     loss_class = loss_class if loss_class else self._get_loss_class(loss_str)
     self._loss_class = loss_class
+    self._N = N
+    self._latent = [[0,0,0,0]]
 
     self.player_id = player_id
     self._session = session
@@ -177,11 +180,15 @@ class PolicyGradient(rl_agent.AbstractAgent):
         shape=[None], dtype=tf.int32, name="action_ph")
     self._return_ph = tf.placeholder(
         shape=[None], dtype=tf.float32, name="return_ph")
+    self._latent_ph = tf.placeholder(
+        shape=[None, N],
+        dtype=tf.float32,
+        name="latent_ph")
 
     # Network
     # activate final as we plug logit and qvalue heads afterwards.
-    self._net_torso = simple_nets.MLPTorso(info_state_size, self._layer_sizes)
-    torso_out = self._net_torso(self._info_state_ph)
+    self._net_torso = simple_nets.MLPTorso(info_state_size, self._N,self._layer_sizes)
+    torso_out = self._net_torso(self._info_state_ph, self._latent_ph)
     torso_out_size = self._layer_sizes[-1]
     self._policy_logits_layer = simple_nets.Linear(
         torso_out_size,
@@ -277,13 +284,16 @@ class PolicyGradient(rl_agent.AbstractAgent):
       return rl_losses.BatchRMLoss
     elif loss_str == "a2c":
       return rl_losses.BatchA2CLoss
+  
+  def set_latent(self,latent):
+    self._latent = latent
 
   def _act(self, info_state, legal_actions):
     # Make a singleton batch for NN compatibility: [1, info_state_size]
     info_state = np.reshape(info_state, [1, -1])
+    latent_values = np.reshape(self._latent, [1, -1])
     policy_probs = self._session.run(
-        self._policy_probs, feed_dict={self._info_state_ph: info_state})
-
+        self._policy_probs, feed_dict={self._info_state_ph: info_state,self._latent_ph: latent_values})
     # Remove illegal actions, re-normalize probs
     probs = np.zeros(self._num_actions)
     probs[legal_actions] = policy_probs[0][legal_actions]
@@ -384,6 +394,7 @@ class PolicyGradient(rl_agent.AbstractAgent):
   def _add_episode_data_to_dataset(self):
     """Add episode data to the buffer."""
     info_states = [data.info_state for data in self._episode_data]
+    latents = [data.latent for data in self._episode_data]  ##check
     rewards = [data.reward for data in self._episode_data]
     discount = [data.discount for data in self._episode_data]
     actions = [data.action for data in self._episode_data]
@@ -399,6 +410,7 @@ class PolicyGradient(rl_agent.AbstractAgent):
     self._dataset["actions"].extend(actions)
     self._dataset["returns"].extend(returns)
     self._dataset["info_states"].extend(info_states)
+    self._dataset["latents"].extend(latents)
     self._episode_data = []
 
   def _add_transition(self, time_step):
@@ -417,6 +429,7 @@ class PolicyGradient(rl_agent.AbstractAgent):
     transition = Transition(
         info_state=(
             self._prev_time_step.observations["info_state"][self.player_id][:]),
+        latent = self._latent,
         action=self._prev_action,
         reward=time_step.rewards[self.player_id],
         discount=time_step.discounts[self.player_id],
@@ -435,6 +448,7 @@ class PolicyGradient(rl_agent.AbstractAgent):
         [self._critic_loss, self._critic_learn_step],
         feed_dict={
             self._info_state_ph: self._dataset["info_states"],
+            self._latent_ph: self._dataset["latents"],
             self._action_ph: self._dataset["actions"],
             self._return_ph: self._dataset["returns"],
         })
@@ -452,6 +466,7 @@ class PolicyGradient(rl_agent.AbstractAgent):
         [self._pi_loss, self._pi_learn_step],
         feed_dict={
             self._info_state_ph: self._dataset["info_states"],
+            self._latent_ph: self._dataset["latents"],
             self._action_ph: self._dataset["actions"],
             self._return_ph: self._dataset["returns"],
         })

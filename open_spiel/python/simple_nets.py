@@ -79,7 +79,7 @@ class Sequential(tf.Module):
     return tensor
 
 
-class MLP(tf.Module):
+class MLP_old(tf.Module):
   """A simple dense network built from linear layers above."""
 
   def __init__(self,
@@ -130,17 +130,62 @@ class MLPTorso(tf.Module):
   Note that every layer includes a ReLU non-linearity activation.
   """
 
-  def __init__(self, input_size, hidden_sizes, name=None):
+  def __init__(self, input_size, latent_size,hidden_sizes, name=None):
     super(MLPTorso, self).__init__(name=name)
     self._layers = []
+    input_size += latent_size
     with self.name_scope:
       for size in hidden_sizes:
         self._layers.append(Linear(in_size=input_size, out_size=size))
         input_size = size
 
   @tf.Module.with_name_scope
-  def __call__(self, x):
+  def __call__(self, y,latent):
+    x = tf.concat([y,latent],axis=1)
     for layer in self._layers:
       x = layer(x)
-    
+    return x
+
+class MLP(tf.Module):
+  """A simple dense network built from linear layers above."""
+
+  def __init__(self,
+               input_size,
+               hidden_sizes,
+               output_size,
+               latent_size,
+               activate_final=False,
+               name=None):
+    """Create the MLP.
+    Args:
+      input_size: (int) number of inputs
+      hidden_sizes: (list) sizes (number of units) of each hidden layer
+      output_size: (int) number of outputs
+      activate_final: (bool) should final layer should include a ReLU
+      name: (string): the name to give to this network
+    """
+    super(MLP, self).__init__(name=name)
+    self._layers = []
+    input_size += latent_size
+
+    with self.name_scope:
+      # Hidden layers
+      #print(self.name_scope.name)
+      for size in hidden_sizes:  #input size + latent size 
+        self._layers.append(Linear(in_size=input_size, out_size=size))
+        input_size = size
+      # Output layer
+      self._layers.append(
+          Linear(
+              in_size=input_size,
+              out_size=output_size,
+              activate_relu=activate_final))
+
+  @tf.Module.with_name_scope
+  def __call__(self, y,latent): #x = info_state+latent 
+    print(latent)
+    x = tf.concat([y,latent],axis=1)
+
+    for layer in self._layers:
+      x = layer(x)
     return x

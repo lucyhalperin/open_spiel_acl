@@ -306,12 +306,15 @@ class DQN(rl_agent.AbstractAgent):
     if np.random.rand() < epsilon:
       action = np.random.choice(legal_actions)
       probs[legal_actions] = 1.0 / len(legal_actions)
+      #print("player_id",self.player_id,action)
+      #print(self.player_id, "random")
     else:
       info_state = np.reshape(info_state, [1, -1])
       latent_values = np.reshape(self._latent, [1, -1])
       q_values = self._session.run(
           self._q_values, feed_dict={self._info_state_ph: info_state,self._latent_ph: latent_values})[0]
       legal_q_values = q_values[legal_actions]
+      
       action = legal_actions[np.argmax(legal_q_values)]
       probs[action] = 1.0
     return action, probs
@@ -319,7 +322,7 @@ class DQN(rl_agent.AbstractAgent):
   def _get_epsilon(self, is_evaluation, power=1.0):
     """Returns the evaluation or decayed epsilon value."""
     if is_evaluation:
-      return 0.0
+      return 0.0 #TODO: check
     decay_steps = min(self._step_counter, self._epsilon_decay_duration)
     decayed_epsilon = (
         self._epsilon_end + (self._epsilon_start - self._epsilon_end) *
@@ -335,7 +338,6 @@ class DQN(rl_agent.AbstractAgent):
     Returns:
       The average loss obtained on this batch of transitions or `None`.
     """
-
     if (len(self._replay_buffer) < self._batch_size or
         len(self._replay_buffer) < self._min_buffer_size_to_learn):
       return None

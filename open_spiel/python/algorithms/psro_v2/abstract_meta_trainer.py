@@ -72,8 +72,8 @@ def sample_episode(state, policies):
   if state.is_simultaneous_node():
     actions = [None] * state.num_players()
     for player in range(state.num_players()):
-      latent = policies[player][0]._policy._latent
-      state_policy = policies[player][0](state, latent, player) #TODO: check
+      latent = policies[player]._policy._latent
+      state_policy = policies[player](state, latent, player) #TODO: check
       outcomes, probs = zip(*state_policy.items())
       actions[player] = utils.random_choice(outcomes, probs)
     state.apply_actions(actions)
@@ -83,9 +83,8 @@ def sample_episode(state, policies):
     outcomes, probs = zip(*state.chance_outcomes())
   else:
     player = state.current_player() #player whose turn it is 
-    state_policy = policies[player][0](state)  #from policy.py, calling does self.action_probabilities(state), latent appears in step fn within agent in rl_policy.py
+    state_policy = policies[player](state)  #from policy.py, calling does self.action_probabilities(state), latent appears in step fn within agent in rl_policy.py
     outcomes, probs = zip(*state_policy.items()) 
-    print(outcomes, probs)
     # TODO 1. check tensorflow version using here (e.g., print(tensorflow.__version__))
     # 2. if tensorflow v1.x, then look into how you can print output of network (note this is not as straightforward as print in pytorch)
     # 3. look into why network output is extremly deterministic (probably network init is wrong)
@@ -181,7 +180,7 @@ class AbstractMetaTrainer(object):
     self._kwargs = kwargs
     self._initialize_policy(initial_policies)
     self._initialize_game_state()
-    self.update_meta_strategies()
+    #self.update_meta_strategies()
     print("strats",self._meta_strategy_probabilities)
 
   def _initialize_policy(self, initial_policies):
@@ -202,7 +201,6 @@ class AbstractMetaTrainer(object):
     self._iterations += 1
     self.update_agents()  # Generate new, Best Response agents via oracle.
     self.update_empirical_gamestate(seed=seed)  # Update gamestate matrix.
-    print(self.meta_games)
     self.update_meta_strategies()  # Compute meta strategy (e.g. Nash)
     print(self._meta_strategy_probabilities)
 

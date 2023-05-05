@@ -102,7 +102,9 @@ class RLOracle(optimization_oracle.AbstractOracle):
 
     super(RLOracle, self).__init__(**kwargs)
 
-  def sample_episode(self, unused_time_step, agents, is_evaluation=False):
+  def sample_episode(self, unused_time_step, opponent, is_evaluation=False):
+    agents = [ opponent, self.new_policy]
+
     time_step = self._env.reset()
     counter = 0 
     cumulative_rewards = 0.0
@@ -130,14 +132,17 @@ class RLOracle(optimization_oracle.AbstractOracle):
         agent_output = agents[player_id].step(
             time_step, is_evaluation=is_evaluation)
         action_list = [agent_output.action]
+
         time_step = self._env.step(action_list)
 
         cumulative_rewards += np.array(time_step.rewards)
+        #print(time_step)
+        #import pdb; pdb.set_trace()
 
     if not is_evaluation:
       for agent in agents:
         agent.step(time_step)
-
+  
     return cumulative_rewards
 
   def _has_terminated(self, episodes_per_oracle):
@@ -151,7 +156,7 @@ class RLOracle(optimization_oracle.AbstractOracle):
   def _rollout(self, game, agents, **oracle_specific_execution_kwargs):
     self.sample_episode(None, agents, is_evaluation=False)
 
-  def generate_new_policies(self, pol):
+  def generate_new_policies(self, current_pol):
     """Generates new policies to be trained into best responses.
 
     Args:
@@ -162,37 +167,37 @@ class RLOracle(optimization_oracle.AbstractOracle):
       List of list of the new policies, following the same structure as
       training_parameters.
     """
-    new_pols = []
-    current_pol = pol
+    
     if isinstance(current_pol, self._best_response_class):
       new_pol = current_pol.copy_with_noise(self._kwargs.get("sigma", 0.0))
     else:
       new_pol = self._best_response_class(self._env, 1,  #player 0?
                                           **self._best_response_kwargs)
+      
       new_pol.unfreeze()
-    new_pols.append(new_pol)
-    return new_pols
+    new_pol._policy.player_id = 1
+    self.new_policy = new_pol
+    return 
 
-  def generate_agents_for_rollout(self, pol,strategy_sampler, graph,index):
+  def generate_agents_for_rollout(self, opponent,strategy_sampler, graph,latent):
 
     #set oracle (self agent) to be have latent = sigma! 
-    oracle = self.new_policies[0]
-    latent = graph[index]
-    oracle._policy.set_latent(latent)
-    assert not oracle.is_frozen() #make sure oracle is not frozen
-    if index != 0:
+    self.new_policy._policy.set_latent(latent)
+
+    assert not self.new_policy.is_frozen() #make sure oracle is not frozen
+    if sum(latent) != 0:
       assert sum(latent) == 1
 
     #get opponent policy 
-    opponent = pol[0]    #TODO: should I update this to be new policy?!?!
-    indices = [i for i in range(opponent._policy._N)] #TODO make N
-
+    indices = [i for i in range(opponent._policy._N)] 
+  
     # Sample interaction graph to set opponent latent variable for the episode
     episode_opp_latent = strategy_sampler([indices],[latent])[0]
     opponent._policy.set_latent(graph[episode_opp_latent])  
+
     assert opponent.is_frozen()       #make sure opponent is frozen
 
-    return [opponent, oracle]
+    return opponent
 
   def __call__(self,
                graph,
@@ -227,24 +232,34 @@ class RLOracle(optimization_oracle.AbstractOracle):
     """
                            
     episodes_per_oracle = 0
-    self.new_policies = self.generate_new_policies(pol) #initalize new policies to LEARN 
-    assert len(self.new_policies) == 1                  #make sure only one new policy
+    unique_rows = {}
+    self.generate_new_policies(pol) #initalize new policies to LEARN 
+    #unique_rows = np.unique(graph, axis=0)
+    
+    for index in graph: #for each row in interaction graph 
+      if tuple(index) not in unique_rows:
+        print("training row " + str(index) + " of interaction graph")
+        while not self._has_terminated(episodes_per_oracle):    #train new policies
+          opponent = self.generate_agents_for_rollout(pol,strategy_sampler, graph, index) #[agent 0 row, agent 1 row]
+          self._rollout(game, opponent, **oracle_specific_execution_kwargs)
 
-    for index in range(graph.shape[0]):
-      print("training row " + str(index) + " of interaction graph")
-      while not self._has_terminated(episodes_per_oracle):    #train new policies
-        agents = self.generate_agents_for_rollout(pol,strategy_sampler, graph, index) #[agent 0 row, agent 1 row]
-        self._rollout(game, agents, **oracle_specific_execution_kwargs)
-        episodes_per_oracle += 1
+          episodes_per_oracle += 1
+
+        unique_rows[tuple(index)] = []
+        pol = self.new_policy.copy_with_noise(sigma=0.0) #update opponent current policy for training of next index 
+
+      else:
+        print("non-unique row")
 
     # Freeze the new policies to keep their weights static. This allows us to
     # later not have to make the distinction between static and training
     # policies in training iterations.
-    second_player = self.new_policies[0].copy_with_noise(sigma=0.0) #create second policy to use during updating empirical game state 
-    second_player._policy.player_id = 0                             #set id equal to 0 
-    self.new_policies.append(second_player)                         #freeze policies 
-    freeze_all(self.new_policies)
+    second_player = self.new_policy.copy_with_noise(sigma=0.0) #create second policy to use during updating empirical game state 
+    second_player._policy.player_id = 0                          
+    #second_player._policy._step_counter = self.new_policy._policy._step_counter
     
-    self.new_policies = [[self.new_policies[1]],[self.new_policies[0]]] #TODO: fix this weird syntax fix 
+    new_policies = [second_player,self.new_policy] #TODO: fix this weird syntax fix 
+    freeze_all(new_policies)
+
     
-    return self.new_policies
+    return new_policies
